@@ -9,6 +9,10 @@
 #
 # 注: go.mod 要求 go >= 1.26.5。若本机未缓存该工具链，go 会自动下载；
 #     这里预置 GOPROXY 与代理，避免内网/受限网络下 DNS 超时导致下载失败。
+#
+# 关于 code 输入: 浏览器跳转后地址栏形如
+#   https://code.phanthy.com/oauth/code/success?code=XXXX#p2a-login
+# 你可以粘贴整段 URL、?code= 之后的部分、或裸 code，脚本会自动清洗提取。
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -17,17 +21,26 @@ cd "$(dirname "$0")"
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 export GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
 if [[ -z "${HTTP_PROXY:-}" && -z "${HTTPS_PROXY:-}" ]]; then
-  # 仅当本机存在常用代理端口时默认启用（按需；不设也不会阻断已缓存场景）
   if [[ -f /dev/tcp/172.18.45.188/7891 ]] 2>/dev/null; then
     export HTTP_PROXY="http://172.18.45.188:7891"
     export HTTPS_PROXY="http://172.18.45.188:7891"
   fi
 fi
 
+# 清洗 code：去掉 URL fragment(#...) 与 query(?) 之外无关部分，只留裸 code
+clean_code() {
+  local c="$1"
+  c="${c%%#*}"          # 去掉 #fragment（含 #p2a-login）
+  c="${c##*code=}"     # 若含 ?code=xxx 或 code=xxx，取其后部分
+  c="${c##*\?}"        # 兜底：若有 ? 但无 code=，取 ? 之后
+  c="$(echo -n "$c" | tr -d '[:space:]')"   # 去空白
+  echo "$c"
+}
+
 CODE=""
 for arg in "$@"; do
   case "$arg" in
-    -code=*) CODE="${arg#-code=}" ;;
+    -code=*) CODE="$(clean_code "${arg#-code=}")" ;;
     *) echo "未知参数: $arg" >&2; exit 1 ;;
   esac
 done
@@ -42,11 +55,15 @@ echo ">>> 步骤 1/2: 生成授权 URL ..."
 go run ./cmd/login -step=url
 
 echo ""
-echo ">>> 步骤 2/2: 授权后粘贴 code（浏览器跳转页 URL 或裸 code 均可）"
+echo ">>> 步骤 2/2: 授权后粘贴 code（支持：裸 code / ?code=xxx / 整段跳转 URL，自动清洗）"
 read -r -p "code> " USER_CODE
-[[ -z "$USER_CODE" ]] && { echo "未输入 code，退出" >&2; exit 1; }
+CLEAN="$(clean_code "$USER_CODE")"
+if [[ -z "$CLEAN" ]]; then
+  echo "未检测到有效 code，退出。可稍后重试: ./login.sh -code=<你的code>" >&2
+  exit 1
+fi
 
-go run ./cmd/login -step=exchange -code="$USER_CODE"
+go run ./cmd/login -step=exchange -code="$CLEAN"
 
 echo ""
 echo "✅ 登录完成。凭证已写入 auths/，重启 phanthycode2api 容器/服务即生效。"
