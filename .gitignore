@@ -33,3 +33,5 @@ REVERSE_ENGINEERING_REPORT.md
 *.swp
 .DS_Store
 Thumbs.db
+# 本地编译产物
+dist/

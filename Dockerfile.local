@@ -1,0 +1,10 @@
+# 离线构建镜像：基于本地已缓存的 alpine:3.20，COPY 预编译静态二进制
+# 适用于无法拉取 golang 基础镜像的网络环境（构建时请先 `go build` 出 dist/phanthycode2api）
+FROM alpine:3.20
+WORKDIR /app
+RUN apk add --no-cache wget ca-certificates
+COPY dist/phanthycode2api /app/phanthycode2api
+COPY config.example.json /app/config.json
+VOLUME ["/app/auths", "/app/data"]
+EXPOSE 7864
+CMD ["/app/phanthycode2api", "-config", "/app/config.json"]
