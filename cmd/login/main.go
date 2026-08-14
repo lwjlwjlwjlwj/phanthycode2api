@@ -218,7 +218,7 @@ func exchangeToken(code, verifier string) (*tokenResp, error) {
 
 func createAPIKey(accessToken string) (string, error) {
 	req, err := http.NewRequest(http.MethodPost,
-		strings.TrimRight(*baseURL, "/")+"/api/oauth/phanthy_cli/create_api_key", nil)
+		strings.TrimRight(*baseURL, "/")+"/api/oauth/claude_cli/create_api_key", nil)
 	if err != nil {
 		return "", err
 	}
