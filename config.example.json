@@ -1,6 +1,6 @@
 {
-  "listen": ":7863",
-  "api_key": "your-api-key",
+  "listen": ":7864",
+  "api_key": "***",
   "auth_dir": "./auths",
   "state_file": "./data/state.json",
   "base_url": "https://code.phanthy.com",

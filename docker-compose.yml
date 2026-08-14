@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  phanthycode2api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: phanthycode2api:latest
+    container_name: phanthycode2api
+    restart: unless-stopped
+    ports:
+      - "7864:7864"
+    environment:
+      # 覆盖配置（与 config.example.json 一致即可，或留空走文件）
+      P2A_LISTEN: ":7864"
+      # P2A_API_KEY: "your-secret-key"   # 设置后开启 Bearer 鉴权；留空=不鉴权
+      P2A_AUTH_DIR: "./auths"
+      P2A_STATE_FILE: "./data/state.json"
+      P2A_BASE_URL: "https://code.phanthy.com"
+    volumes:
+      # 凭证与状态持久化（含真实 token，切勿提交到 git）
+      - ./auths:/app/auths
+      - ./data:/app/data
+      # 如需自定义配置，挂载 config.json 覆盖默认
+      # - ./config.json:/app/config.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "-q", "-O", "-", "http://localhost:7864/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - p2a-net
+
+networks:
+  p2a-net:
+    driver: bridge
