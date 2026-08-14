@@ -1,0 +1,19 @@
+{
+  "listen": ":7863",
+  "api_key": "your-api-key",
+  "auth_dir": "./auths",
+  "state_file": "./data/state.json",
+  "base_url": "https://code.phanthy.com",
+  "cooldown": {
+    "hard_credit": "12h",
+    "soft_rate": "60s",
+    "err_threshold": 3,
+    "err_cooldown": "10m"
+  },
+  "schedule": {
+    "keepalive_hours": [22]
+  },
+  "upstream": {
+    "timeout_seconds": 120
+  }
+}
