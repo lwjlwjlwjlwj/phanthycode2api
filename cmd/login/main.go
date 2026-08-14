@@ -94,11 +94,13 @@ func stepExchange() {
 		fatal("token 交换失败: %v\n提示：若为 invalid_grant，说明 code 已过期，请重新运行 step=url", err)
 	}
 
-	// 获取 api_key
+	// 获取 api_key（prod 上游该端点固定 404，官方 CLI 同样静默忽略，用 access_token 兜底）
 	fmt.Println("获取 api_key ...")
 	apiKey, err := createAPIKey(tr.AccessToken)
 	if err != nil {
 		fmt.Printf("  创建 api_key 失败（服务启动时会自动补齐）: %v\n", err)
+	} else if apiKey == "" {
+		fmt.Println("  api_key 暂不可用（上游返回 404），将使用 access_token 兜底，不影响使用")
 	}
 
 	// 落盘
@@ -240,6 +242,11 @@ func createAPIKey(accessToken string) (string, error) {
 		}
 	}
 	if resp.StatusCode >= 400 {
+		// 上游 create_api_key 端点在 prod 固定返回 404（官方 CLI 亦如此），
+		// 用 access_token 兜底即可，静默忽略，不打印错误。
+		if resp.StatusCode == http.StatusNotFound {
+			return "", nil
+		}
 		return "", fmt.Errorf("http %d: %s", resp.StatusCode, trunc(string(raw), 200))
 	}
 	var m map[string]any
