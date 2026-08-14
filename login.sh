@@ -48,6 +48,20 @@ done
 if [[ -n "$CODE" ]]; then
   echo ">>> 用已有 code 交换 token ..."
   go run ./cmd/login -step=exchange -code="$CODE"
+  echo ""
+  echo "✅ 登录完成。凭证已写入 auths/。"
+  # 自动重启容器（同上）
+  if [[ "${P2A_NO_RESTART:-}" != "1" ]] && command -v docker >/dev/null 2>&1; then
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx phanthycode2api; then
+      echo "🔄 检测到容器 phanthycode2api，自动重启以加载新凭证 ..."
+      docker restart phanthycode2api >/dev/null 2>&1 && echo "   重启完成（容器会自动重新读取 auths/）。" \
+        || echo "   自动重启失败，请手动: docker restart phanthycode2api"
+    else
+      echo "ℹ️  未检测到运行中的容器，请手动重启服务以生效。"
+    fi
+  else
+    echo "ℹ️  请手动重启 phanthycode2api 服务以生效（设置 P2A_NO_RESTART=1 可跳过自动重启）。"
+  fi
   exit 0
 fi
 
@@ -66,4 +80,17 @@ fi
 go run ./cmd/login -step=exchange -code="$CLEAN"
 
 echo ""
-echo "✅ 登录完成。凭证已写入 auths/，重启 phanthycode2api 容器/服务即生效。"
+echo "✅ 登录完成。凭证已写入 auths/。"
+
+# 自动重启容器（若存在且未禁用），让账号池重新加载新凭证
+if [[ "${P2A_NO_RESTART:-}" != "1" ]] && command -v docker >/dev/null 2>&1; then
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx phanthycode2api; then
+    echo "🔄 检测到容器 phanthycode2api，自动重启以加载新凭证 ..."
+    docker restart phanthycode2api >/dev/null 2>&1 && echo "   重启完成（容器会自动重新读取 auths/）。" \
+      || echo "   自动重启失败，请手动: docker restart phanthycode2api"
+  else
+    echo "ℹ️  未检测到运行中的容器，请手动重启服务以生效。"
+  fi
+else
+  echo "ℹ️  请手动重启 phanthycode2api 服务以生效（设置 P2A_NO_RESTART=1 可跳过自动重启）。"
+fi
