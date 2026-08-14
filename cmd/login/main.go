@@ -218,12 +218,11 @@ func exchangeToken(code, verifier string) (*tokenResp, error) {
 
 func createAPIKey(accessToken string) (string, error) {
 	req, err := http.NewRequest(http.MethodPost,
-		strings.TrimRight(*baseURL, "/")+"/api/oauth/claude_cli/create_api_key", nil)
+		strings.TrimRight(*baseURL, "/")+"/api/oauth/phanthy_cli/create_api_key", nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	resp, err := http.DefaultClient.Do(req)
@@ -247,16 +246,18 @@ func createAPIKey(accessToken string) (string, error) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return "", err
 	}
-	for _, k := range []string{"api_key", "apiKey"} {
-		if v, ok := m[k].(string); ok && v != "" {
-			return v, nil
-		}
-	}
+	// 对齐官方 CLI：api_key 实际在 data.raw_key 字段
 	if d, ok := m["data"].(map[string]any); ok {
-		for _, k := range []string{"api_key", "apiKey"} {
+		for _, k := range []string{"raw_key", "api_key", "apiKey"} {
 			if v, ok := d[k].(string); ok && v != "" {
 				return v, nil
 			}
+		}
+	}
+	// 兜底：直接在顶层查找
+	for _, k := range []string{"api_key", "apiKey", "raw_key"} {
+		if v, ok := m[k].(string); ok && v != "" {
+			return v, nil
 		}
 	}
 	return "", fmt.Errorf("no api_key in response: %s", trunc(string(raw), 200))
