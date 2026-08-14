@@ -6,9 +6,23 @@
 #   ./login.sh -code=xxx    # 跳过第一步，直接用已有 code 交换（需先跑过第一步生成 verifier）
 #
 # 依赖: go（用于 go run ./cmd/login）。凭证落盘到 auths/，重启服务即生效。
+#
+# 注: go.mod 要求 go >= 1.26.5。若本机未缓存该工具链，go 会自动下载；
+#     这里预置 GOPROXY 与代理，避免内网/受限网络下 DNS 超时导致下载失败。
 set -euo pipefail
 
 cd "$(dirname "$0")"
+
+# 工具链与依赖下载防护（不影响已缓存环境；无代理时这些变量为空也不会出错）
+export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
+export GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
+if [[ -z "${HTTP_PROXY:-}" && -z "${HTTPS_PROXY:-}" ]]; then
+  # 仅当本机存在常用代理端口时默认启用（按需；不设也不会阻断已缓存场景）
+  if [[ -f /dev/tcp/172.18.45.188/7891 ]] 2>/dev/null; then
+    export HTTP_PROXY="http://172.18.45.188:7891"
+    export HTTPS_PROXY="http://172.18.45.188:7891"
+  fi
+fi
 
 CODE=""
 for arg in "$@"; do
