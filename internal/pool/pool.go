@@ -44,14 +44,18 @@ type Status struct {
 	Reason   string    `json:"reason,omitempty"`
 	Disabled bool      `json:"disabled"`
 	ErrCount int       `json:"err_count,omitempty"`
+	// LastKeepaliveAt 是最近一次成功保活（token 刷新）的时间；
+	// 零值表示本次运行还没保活过。
+	LastKeepaliveAt time.Time `json:"last_keepalive_at,omitempty"`
 }
 
 type entry struct {
-	a        *auth.Auth
-	disabled bool
-	reason   string
-	until    time.Time
-	errCount int
+	a             *auth.Auth
+	disabled      bool
+	reason        string
+	until         time.Time
+	errCount      int
+	lastKeepalive time.Time
 }
 
 func (e *entry) healthy(now time.Time) bool {
@@ -64,13 +68,17 @@ func (e *entry) healthy(now time.Time) bool {
 	return true
 }
 
+// accountState 是 state.json 里单个账号的持久化字段。
+type accountState struct {
+	Disabled        bool      `json:"disabled"`
+	Reason          string    `json:"reason,omitempty"`
+	Until           time.Time `json:"until,omitempty"`
+	LastKeepaliveAt time.Time `json:"last_keepalive_at,omitempty"`
+}
+
 // stateFile 持久化格式。
 type stateFile struct {
-	Accounts map[string]struct {
-		Disabled bool      `json:"disabled"`
-		Reason   string    `json:"reason,omitempty"`
-		Until    time.Time `json:"until,omitempty"`
-	} `json:"accounts"`
+	Accounts map[string]accountState `json:"accounts"`
 }
 
 // Pool 账号池。
@@ -165,6 +173,22 @@ func (p *Pool) PickExcluding(tried map[string]bool) *auth.Auth {
 	return best.a
 }
 
+// HealthyCount 返回当前可挑选的健康账号数（不含冷却/禁用）。
+// 用于「模型被拒时换号重试」的预算：上游拒绝是秒回，把健康账号都试一遍
+// 的代价极低，比拿单个账号的结果断定套餐不含该模型准确得多。
+func (p *Pool) HealthyCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	now := time.Now()
+	n := 0
+	for _, e := range p.byUID {
+		if e.healthy(now) {
+			n++
+		}
+	}
+	return n
+}
+
 // Cooldown 冷却账号至 now+d。
 func (p *Pool) Cooldown(uid string, kind CoolKind, d time.Duration, reason string) {
 	p.mu.Lock()
@@ -185,6 +209,37 @@ func (p *Pool) Disable(uid, reason string) {
 		e.disabled = true
 		e.reason = reason
 	}
+	p.saveLocked()
+}
+
+// Enable 清除账号的禁用与冷却状态（手动刷新/保活成功后调用）。
+func (p *Pool) Enable(uid string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if e, ok := p.byUID[uid]; ok {
+		e.disabled = false
+		e.reason = ""
+		e.until = time.Time{}
+		e.errCount = 0
+	}
+	p.saveLocked()
+}
+
+// NoteKeepalive 记录一次成功的保活（token 已刷新），供管理台显示自动保活进度。
+func (p *Pool) NoteKeepalive(uid string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if e, ok := p.byUID[uid]; ok {
+		e.lastKeepalive = time.Now()
+	}
+	p.saveLocked()
+}
+
+// Remove 从账号池移除指定账号。
+func (p *Pool) Remove(uid string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.byUID, uid)
 	p.saveLocked()
 }
 
@@ -252,14 +307,15 @@ func (p *Pool) List() []Status {
 func (p *Pool) statusOf(uid string, e *entry) Status {
 	now := time.Now()
 	return Status{
-		UID:      uid,
-		Nickname: e.a.Nickname,
-		HasAPI:   e.a.APIKey != "",
-		Cooling:  !e.until.IsZero() && now.Before(e.until),
-		Until:    e.until,
-		Reason:   e.reason,
-		Disabled: e.disabled,
-		ErrCount: e.errCount,
+		UID:             uid,
+		Nickname:        e.a.Nickname,
+		HasAPI:          e.a.APIKey != "",
+		Cooling:         !e.until.IsZero() && now.Before(e.until),
+		Until:           e.until,
+		Reason:          e.reason,
+		Disabled:        e.disabled,
+		ErrCount:        e.errCount,
+		LastKeepaliveAt: e.lastKeepalive,
 	}
 }
 
@@ -278,10 +334,11 @@ func (p *Pool) load() {
 	}
 	for uid, s := range sf.Accounts {
 		p.byUID[uid] = &entry{
-			a:        &auth.Auth{UID: uid},
-			disabled: s.Disabled,
-			reason:   s.Reason,
-			until:    s.Until,
+			a:             &auth.Auth{UID: uid},
+			disabled:      s.Disabled,
+			reason:        s.Reason,
+			until:         s.Until,
+			lastKeepalive: s.LastKeepaliveAt,
 		}
 	}
 }
@@ -290,20 +347,13 @@ func (p *Pool) saveLocked() {
 	if p.stateFp == "" {
 		return
 	}
-	sf := stateFile{Accounts: map[string]struct {
-		Disabled bool      `json:"disabled"`
-		Reason   string    `json:"reason,omitempty"`
-		Until    time.Time `json:"until,omitempty"`
-	}{}}
+	sf := stateFile{Accounts: map[string]accountState{}}
 	for uid, e := range p.byUID {
-		sf.Accounts[uid] = struct {
-			Disabled bool      `json:"disabled"`
-			Reason   string    `json:"reason,omitempty"`
-			Until    time.Time `json:"until,omitempty"`
-		}{
-			Disabled: e.disabled,
-			Reason:   e.reason,
-			Until:    e.until,
+		sf.Accounts[uid] = accountState{
+			Disabled:        e.disabled,
+			Reason:          e.reason,
+			Until:           e.until,
+			LastKeepaliveAt: e.lastKeepalive,
 		}
 	}
 	raw, err := json.MarshalIndent(sf, "", "  ")

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PhanthyCode2API 管理</title>
+<style>
+:root{--bg:#f3f5f8;--card:#fff;--text:#182230;--muted:#667085;--line:#dfe4ea;--brand:#2563eb;--danger:#dc2626;--ok:#16a34a}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+header{position:sticky;top:0;display:flex;align-items:center;gap:18px;height:56px;padding:0 20px;background:#fff;border-bottom:1px solid var(--line)}
+.brand{font-weight:700}.brand small{color:var(--muted);font-weight:500;margin-left:8px}
+nav{display:flex;gap:6px;overflow:auto}.nav-btn{border:0;background:transparent;padding:8px 12px;border-radius:8px;cursor:pointer;color:var(--muted)}.nav-btn.active{background:#e8f0ff;color:var(--brand);font-weight:600}
+main{max-width:1200px;margin:20px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}.stat b{display:block;font-size:24px}
+h2{margin:0 0 12px;font-size:18px}h3{margin:0 0 8px;font-size:15px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.field{display:flex;flex-direction:column;gap:5px}.field label{font-size:12px;color:var(--muted)}
+input,textarea,select{border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;background:#fff}textarea{min-height:320px;font-family:ui-monospace,Consolas,monospace}
+button,.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}.primary{background:var(--brand);border-color:var(--brand);color:#fff}.danger{color:var(--danger)}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12px}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;background:#eef2f6}.on{color:#166534;background:#dcfce7}.off{color:#991b1b;background:#fee2e2}
+.muted{color:var(--muted)}.error{color:var(--danger)}.mono{font-family:ui-monospace,Consolas,monospace}
+#login{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg);z-index:10}.login-card{width:min(420px,92vw);background:#fff;padding:24px;border-radius:14px;border:1px solid var(--line)}
+dialog{border:0;border-radius:14px;width:min(620px,94vw);max-height:min(90vh,860px);padding:0;box-shadow:0 24px 60px rgba(15,23,42,.25);display:none;flex-direction:column;overflow:hidden}
+dialog[open]{display:flex}
+dialog::backdrop{background:rgba(15,23,42,.45)}
+.dlg-head{padding:18px 22px 0}.dlg-head h3{margin:0;font-size:17px}.dlg-head p{margin:6px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.dlg-body{display:flex;flex-direction:column;gap:14px;padding:16px 22px;overflow:auto}
+.dlg-body .field{gap:6px}.dlg-body .field label{font-size:12.5px;font-weight:600;color:#374151}
+.dlg-body textarea{width:100%;min-height:60px;height:60px;max-height:132px;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.55}
+#oauthURL{height:88px;max-height:160px}
+#authCode{height:56px;max-height:120px}
+.dlg-body textarea:focus,.dlg-body input:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.dlg-steps{margin:0;padding-left:20px;font-size:12.5px;line-height:1.7}.dlg-steps li+li{margin-top:3px}
+.dlg-actions{display:flex;gap:8px;flex-wrap:wrap}
+.dlg-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 22px;background:#fafbfc;border-top:1px solid var(--line)}
+#accountMsg:empty{display:none}
+.bar{height:10px;background:#eef2f6;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
+.page-title{margin:0 0 18px}.page-title h2{margin:0;font-size:22px;letter-spacing:-.01em}.page-title p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.settings-card{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 1px 2px rgba(16,24,40,.04);margin-bottom:18px;overflow:hidden}
+.settings-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 20px;border-bottom:1px solid var(--line)}
+.settings-head h3{margin:0;font-size:15px}.settings-head p{margin:4px 0 0;color:var(--muted);font-size:12.5px}
+.settings-body{padding:20px}
+.settings-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.settings-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.settings-card .field label{font-size:12.5px;font-weight:600;color:#374151}
+.settings-card .hint{font-size:12px;color:var(--muted)}
+.settings-card input,.settings-card textarea,.settings-card select{width:100%}
+.settings-card input:focus,.settings-card textarea:focus,.settings-card select:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.settings-card input:disabled,.settings-card select:disabled{background:#f9fafb;color:var(--muted)}
+.settings-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
+.settings-actions.sticky{padding:14px 20px;background:#fafbfc;border-top:1px solid var(--line);margin-top:0}
+.msg{font-size:13px;color:var(--muted)}.msg.error{color:var(--danger)}
+details.raw summary{cursor:pointer;padding:16px 20px;font-weight:600;font-size:14px;color:#374151;list-style:none}
+details.raw summary::-webkit-details-marker{display:none}
+details.raw summary:after{content:"展开";float:right;color:var(--brand);font-weight:500;font-size:13px}
+details.raw[open] summary:after{content:"收起"}
+@media(max-width:900px){.settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.settings-grid,.settings-grid.two{grid-template-columns:1fr}}
+@media(max-width:720px){header{flex-wrap:wrap;height:auto;padding:10px}nav{width:100%}table{display:block;overflow:auto}}
+.wallet{min-width:212px}.wallet-head{font-size:13.5px;font-variant-numeric:tabular-nums}.wallet-head b{font-size:16px;margin-right:1px}.wallet .bar{height:6px;margin:7px 0 8px}.wallet .bar.warn i{background:#f59e0b}.wallet .bar.low i{background:var(--danger)}.pools{display:flex;flex-wrap:wrap;gap:4px}.pool{display:inline-flex;align-items:baseline;gap:4px;background:#f6f8fb;border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:12px;white-space:nowrap}.pool b,.pool i{font-variant-numeric:tabular-nums}.pool i{font-style:normal;color:var(--muted)}.pool em{font-style:normal;color:var(--muted);font-size:11px}.wallet .note{margin-top:7px;font-size:11.5px;line-height:1.6}</style>
+</head>
+<body>
+<div id="login"><div class="login-card"><h2>管理登录</h2><div class="field"><label>管理员密码</label><input id="password" type="password"></div><button class="primary" onclick="login()">登录</button><p id="loginMsg" class="error"></p></div></div>
+<header><div class="brand">PhanthyCode2API<small>管理控制台</small></div><nav><button class="nav-btn active" data-view="dashboard">总览</button><button class="nav-btn" data-view="accounts">账号</button><button class="nav-btn" data-view="keys">密钥</button><button class="nav-btn" data-view="logs">日志</button><button class="nav-btn" data-view="config">设置</button><button onclick="logout()">退出</button></nav></header>
+<main>
+<section id="dashboard"><div class="grid"><div class="stat">账号<b id="stAccounts">-</b></div><div class="stat">分发密钥<b id="stKeys">-</b></div><div class="stat">总请求<b id="stTotal">-</b></div><div class="stat">错误<b id="stErrors">-</b></div></div><div class="card"><h3>最近 30 天请求</h3><div id="chart"></div></div><div class="card"><h3>按密钥统计</h3><table><thead><tr><th>密钥</th><th>请求</th></tr></thead><tbody id="byKey"></tbody></table></div></section>
+<section id="accounts" hidden><div class="card"><div class="row"><button class="primary" onclick="showAccountForm()">添加账号</button><button onclick="loadAccounts()">刷新</button></div><table><thead><tr><th>账号</th><th>状态</th><th>积分 / 额度池</th><th>Token</th><th>操作</th></tr></thead><tbody id="accountRows"></tbody></table></div></section>
+<section id="keys" hidden><div class="card"><div class="row"><div class="field"><label>名称</label><input id="keyName" value="默认密钥"></div><div class="field"><label>次数上限（0 无限）</label><input id="keyMax" type="number" value="0"></div><button class="primary" onclick="createKey()">创建</button><button onclick="loadKeys()">刷新</button></div><p id="newKeyMsg"></p><table><thead><tr><th>名称</th><th>密钥</th><th>配额</th><th>状态</th><th>操作</th></tr></thead><tbody id="keyRows"></tbody></table></div></section>
+<section id="logs" hidden><div class="card"><div class="row"><button onclick="loadLogs()">刷新</button><button class="danger" onclick="clearLogs()">清空日志</button></div><table><thead><tr><th>时间</th><th>密钥</th><th>账号</th><th>模型</th><th>状态</th><th>耗时</th><th>Tokens</th></tr></thead><tbody id="logRows"></tbody></table></div></section>
+<section id="config" hidden>
+  <div class="page-title"><h2>设置</h2><p>管理登录密码与运行参数，保存后重启程序生效。</p></div>
+  <div class="settings-card">
+    <div class="settings-head"><div><h3>管理员密码</h3><p>修改后立即生效，下次登录使用新密码。</p></div></div>
+    <div class="settings-body">
+      <div class="settings-grid two">
+        <div class="field"><label>新密码</label><input id="newPassword" type="password" placeholder="至少 8 位" autocomplete="new-password"><span class="hint">建议使用字母、数字和符号组合</span></div>
+        <div class="field"><label>确认新密码</label><input id="confirmPassword" type="password" placeholder="再次输入新密码" autocomplete="new-password"></div>
+      </div>
+      <div class="settings-actions"><button class="primary" onclick="changePassword()">修改密码</button><span id="passwordMsg" class="msg"></span></div>
+    </div>
+  </div>
+  <div class="settings-card">
+    <div class="settings-head"><div><h3>基础设置</h3><p>服务监听、凭证目录与上游连接参数。</p></div></div>
+    <div class="settings-body">
+      <div class="settings-grid">
+        <div class="field"><label>监听地址</label><input id="cfgListen" placeholder=":7864"><span class="hint">例如 :7864 或 127.0.0.1:7864，修改后需重启</span></div>
+        <div class="field"><label>全局 API Key</label><input id="cfgAPIKey" placeholder="留空表示不鉴权"><span class="hint">下游客户端使用的 Bearer Token</span></div>
+        <div class="field"><label>账号目录</label><input id="cfgAuthDir"><span class="hint">OAuth 凭证保存位置</span></div>
+        <div class="field"><label>状态文件</label><input id="cfgStateFile"><span class="hint">账号冷却状态持久化位置</span></div>
+        <div class="field"><label>上游地址</label><input id="cfgBaseURL"><span class="hint">PhanthyCode 服务地址</span></div>
+        <div class="field"><label>上游超时</label><input id="cfgTimeout" type="number" min="1"><span class="hint">单位：秒</span></div>
+        <div class="field"><label>日志级别</label>
+          <select id="cfgLogLevel">
+            <option value="info">info（每个请求一行摘要，推荐）</option>
+            <option value="debug">debug（含换号与上游细节，排障用）</option>
+            <option value="error">error（只输出失败与异常）</option>
+          </select>
+          <span class="hint">修改后需重启生效</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="settings-card">
+    <div class="settings-head"><div><h3>思考模式</h3><p>上游在缺省时会自行开启扩展思考，首字延迟从 1~2 秒涨到 10 秒以上。默认关闭可显著提速。</p></div></div>
+    <div class="settings-body">
+      <div class="settings-grid">
+        <div class="field"><label>模式</label>
+          <select id="cfgThinkingMode">
+            <option value="off">关闭（推荐，最快）</option>
+            <option value="auto">自动（跟随客户端推理档位）</option>
+            <option value="on">开启（最强推理，最慢）</option>
+          </select>
+          <span class="hint">auto：客户端声明 low/minimal/none 时关闭，medium 及以上开启</span>
+        </div>
+        <div class="field"><label>思考预算</label><input id="cfgThinkingBudget" type="number" min="1024" max="16384"><span class="hint">单位：token，仅开启时生效，默认 4096</span></div>
+      </div>
+      <div class="settings-actions"><button class="primary" onclick="saveConfig()">保存配置</button><button onclick="loadConfig()">重新加载</button><span id="configMsg2" class="msg"></span></div>
+    </div>
+  </div>
+  <div class="settings-card">
+    <div class="settings-head"><div><h3>冷却与调度</h3><p>账号异常后的冷却策略，以及 token 的自动保活节奏。</p></div></div>
+    <div class="settings-body">
+      <div class="settings-grid">
+        <div class="field"><label>积分不足冷却</label><input id="cfgHardCredit" placeholder="12h"><span class="hint">例如 12h、30m</span></div>
+        <div class="field"><label>限流冷却</label><input id="cfgSoftRate" placeholder="60s"><span class="hint">例如 60s、5m</span></div>
+        <div class="field"><label>连续错误阈值</label><input id="cfgErrThreshold" type="number" min="1"><span class="hint">达到后进入错误冷却</span></div>
+        <div class="field"><label>错误冷却</label><input id="cfgErrCooldown" placeholder="10m"><span class="hint">例如 10m、1h</span></div>
+        <div class="field"><label>保活间隔</label><input id="cfgKeepaliveInterval" placeholder="30m"><span class="hint">后台每隔多久检查一次 token，默认 30m；填 0 关闭</span></div>
+        <div class="field"><label>保活提前量</label><input id="cfgKeepaliveSkew" placeholder="15m"><span class="hint">token 剩余寿命少于它就提前刷新，默认 15m</span></div>
+        <div class="field"><label>定点保活（可选）</label><input id="cfgKeepaliveHours" placeholder="留空"><span class="hint">额外在这些整点强制刷新一次，多个小时用逗号分隔</span></div>
+        <div class="field"><label>自动恢复</label>
+          <select id="cfgAutoRecover">
+            <option value="1">开启（推荐）</option>
+            <option value="0">关闭</option>
+          </select>
+          <span class="hint">被禁用（session 失效）的账号也参与保活，刷新成功后自动重新启用</span>
+        </div>
+      </div>
+      <div class="settings-actions sticky"><button class="primary" onclick="saveConfig()">保存配置</button><button onclick="loadConfig()">重新加载</button><span id="configMsg" class="msg"></span></div>
+    </div>
+  </div>
+  <div class="settings-card">
+    <div class="settings-head"><div><h3>每日开工奖励</h3><p>模拟官方桌面端：每天自动登记安装并领取「每日登录奖励」。奖励按北京时间 0 点后可领，连续天数越多单次越多。</p></div></div>
+    <div class="settings-body">
+      <div class="settings-grid">
+        <div class="field"><label>自动领取</label>
+          <select id="cfgDailyReward">
+            <option value="1">开启（推荐）</option>
+            <option value="0">关闭</option>
+          </select>
+          <span class="hint">关闭后仍可在账号页点「领取奖励」手动补领</span>
+        </div>
+        <div class="field"><label>领取时刻（北京时间 · 时）</label><input id="cfgClaimHour" type="number" min="0" max="23"><span class="hint">默认 0 点，建议不早于 00:05</span></div>
+        <div class="field"><label>领取时刻（北京时间 · 分）</label><input id="cfgClaimMinute" type="number" min="0" max="59"><span class="hint">默认 5 分</span></div>
+      </div>
+      <div class="settings-actions"><button class="primary" onclick="saveConfig()">保存配置</button><button onclick="loadConfig()">重新加载</button><span id="configMsg3" class="msg"></span></div>
+    </div>
+  </div>
+  <div class="settings-card">
+    <details class="raw">
+      <summary>高级：原始配置文件</summary>
+      <div class="settings-body">
+        <textarea id="configText" style="min-height:260px"></textarea>
+        <div class="settings-actions"><button onclick="saveRawConfig()">保存原始 JSON</button><button onclick="loadConfig()">重新加载</button><span id="rawMsg" class="msg"></span></div>
+      </div>
+    </details>
+  </div>
+</section>
+</main>
+<dialog id="accountDialog">
+  <div class="dlg-head"><h3>添加账号</h3><p>凭据保存在账号目录里，提交成功后会立刻参与调度并自动保活。</p></div>
+  <div class="dlg-body">
+    <ol class="dlg-steps">
+      <li>点「生成授权链接」，再点「打开链接」在浏览器中打开。</li>
+      <li>登录并授权，成功后页面会显示一串授权码。</li>
+      <li>复制授权码粘贴到下面，点「提交授权码」完成添加。</li>
+    </ol>
+    <div class="dlg-actions"><button onclick="makeOAuthURL()">生成授权链接</button><button onclick="openOAuthURL()">打开链接</button></div>
+    <div class="field"><label>授权链接</label><textarea id="oauthURL" rows="2" placeholder="点上方「生成授权链接」自动填入；也可以直接粘贴"></textarea></div>
+    <div class="field"><label>授权码（Authorization code）</label><textarea id="authCode" rows="2" placeholder="粘贴浏览器里显示的 code"></textarea></div>
+  </div>
+  <div class="dlg-foot"><button class="primary" onclick="addAccount()">提交授权码</button><button onclick="document.getElementById('accountDialog').close()">取消</button><span id="accountMsg" class="msg"></span></div>
+</dialog>
+<script>
+const $=s=>document.querySelector(s);let state={keys:[],accounts:[]};
+async function api(path,opts={}){const r=await fetch('/admin/api/'+path,{headers:{'Content-Type':'application/json'},credentials:'same-origin',...opts});if(r.status===401){$('#login').style.display='grid';throw new Error('unauthorized')}const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||r.statusText);return data}
+async function login(){try{await api('login',{method:'POST',body:JSON.stringify({password:$('#password').value})});$('#login').style.display='none';boot()}catch(e){$('#loginMsg').textContent=e.message}}
+async function logout(){await api('logout',{method:'POST'});location.reload()}
+document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('section').forEach(x=>x.hidden=true);$('#'+b.dataset.view).hidden=false;document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');({dashboard:loadDashboard,accounts:loadAccounts,keys:loadKeys,logs:loadLogs,config:loadConfig})[b.dataset.view]()});
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function dt(v){return v?new Date(v*1000).toLocaleString():'-'}
+async function loadDashboard(){const [stats,accounts,keys]=await Promise.all([api('stats'),api('accounts'),api('keys')]);$('#stAccounts').textContent=accounts.accounts.length;$('#stKeys').textContent=keys.keys.length;$('#stTotal').textContent=stats.total;$('#stErrors').textContent=stats.errors;$('#byKey').innerHTML=Object.entries(stats.by_key).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">暂无数据</td></tr>';const days=Object.entries(stats.daily).sort();const max=Math.max(1,...days.map(x=>x[1]));$('#chart').innerHTML=days.map(([d,v])=>`<div style="display:flex;align-items:center;gap:8px;margin:5px 0"><span class="muted" style="width:78px">${d}</span><div class="bar" style="flex:1"><i style="width:${v/max*100}%"></i></span></span><span style="width:45px;text-align:right">${v}</span></div>`).join('')||'<span class="muted">暂无数据</span>'}
+async function loadAccounts(){const d=await api('accounts');state.accounts=d.accounts;$('#accountRows').innerHTML=d.accounts.map(a=>`<tr><td><b>${esc(a.nickname||a.uid)}</b><div class="muted mono">${esc(a.uid)}</div></td><td>${a.disabled?'<span class="pill off">禁用</span>':a.cooling?'<span class="pill">冷却</span>':'<span class="pill on">健康</span>'}${a.reason?`<div class="muted">${esc(a.reason)}</div>`:''}${keepaliveLine(a)}</td><td>${creditsCell(a)}</td><td>${a.has_api_key?'API key':'Access token'}</td><td><button onclick="accountOp('${esc(a.uid)}','claim')">领取奖励</button> <button onclick="accountOp('${esc(a.uid)}','refresh')">刷新</button> <button title="无需手动操作，服务会自动保活；点这里立即换一份新 token" onclick="accountOp('${esc(a.uid)}','keepalive')">立即保活</button> <button onclick="accountOp('${esc(a.uid)}','enable')">恢复</button> <button class="danger" onclick="accountOp('${esc(a.uid)}','delete')">删除</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">暂无账号</td></tr>'}
+function kts(v){if(!v)return '';const d=new Date(v);return isNaN(d)?'':d.toLocaleString()}
+function keepaliveLine(a){
+ const t=kts(a.last_keepalive_at);
+ if(a.disabled)return '<div class="muted" title="服务会持续重试保活，刷新成功后自动恢复启用">保活 '+(t?'<span style="color:#b45309">'+esc(t)+'</span>':'待重试')+'</div>';
+ if(!t)return '<div class="muted" title="服务每隔一段时间自动检查 token，接近过期就刷新，无需手动操作">自动保活 <span class="muted">待首次</span></div>';
+ return '<div class="muted" title="服务自动刷新 token，这里显示最近一次成功保活的时间">自动保活 '+esc(t)+'</div>';
+}
+function num(v){if(v==null)return'0';const n=Number(v);if(!isFinite(n))return String(v);return (Math.round(n*100)/100).toLocaleString('zh-CN')}
+function day(s){if(!s)return'';const d=new Date(s);return isNaN(d)?'':(d.getMonth()+1)+'月'+d.getDate()+'日'}
+function dailyLine(d){
+ if(!d||typeof d!=='object')return '';
+ const bits=[];
+ if(d.streak>0)bits.push('连续 '+d.streak+' 天');
+ if(d.total_granted)bits.push('累计 '+num(d.total_granted));
+ const tail=bits.length?'<span class="muted"> · '+esc(bits.join(' · '))+'</span>':'';
+ if(d.granted_today){
+  const tip='上游按北京时间 0 点发放，本服务已自动领取'+(d.next_points?'；下一档 '+num(d.next_points)+' 积分':'');
+  return '<div class="note" style="color:#0f766e" title="'+esc(tip)+'">开工奖励 <b>今日已到账 +'+num(d.today_points)+'</b>'+tail+'</div>';
+ }
+ if(d.source==='summary'){
+  const info=[];
+  if(d.next_points)info.push('下一档 '+num(d.next_points)+' 积分');
+  if(d.next_eligible_at)info.push('下次可领 '+new Date(d.next_eligible_at).toLocaleString());
+  return '<div class="note" title="上游按北京时间 0 点发放，本服务到点会自动领取；也可在操作列点「领取奖励」手动补领">开工奖励 <span class="muted">今日待领取</span>'
+   +(info.length?'<span class="muted"> · '+esc(info.join(' · '))+'</span>':'')+tail+'</div>';
+ }
+ if(!d.granted_days)return '<div class="note" title="服务每天会自动登记桌面端安装并领取，也可在操作列点「领取奖励」手动补领">开工奖励 <span class="muted">暂无记录</span></div>';
+ const dueMs=Date.parse(d.today+'T00:30:00+08:00');
+ if(isFinite(dueMs)&&Date.now()>dueMs)return '<div class="note" style="color:#b45309" title="超过 30 分钟仍未到账，可在操作列点「领取奖励」手动补领">开工奖励 <b>今日未到账</b>'+tail+'</div>';
+ return '<div class="note" title="上游按北京时间 0 点发放，本服务到点会自动领取">开工奖励 <span class="muted">今日待发放</span>'+tail+'</div>';
+}
+function creditsCell(a){
+ if(a.credits_error)return '<span class="muted">读取失败</span>'+dailyLine(a.daily);
+ const avail=a.credits_available;
+ const pools=Array.isArray(a.wallet_pools)?a.wallet_pools:[];
+ if(!pools.length){
+  if(avail!=null)return '<b>'+num(avail)+'</b><span class="muted"> 积分</span><div class="muted">官网钱包余额</div>'+dailyLine(a.daily);
+  if(a.credits_remaining==null)return '<span class="muted">-</span>';
+  const reset=a.credits_reset_at?'<div class="muted">到期 '+day(a.credits_reset_at)+'</div>':'';
+  const pct=a.credits_percent==null?'':' '+a.credits_percent+'%';
+  return '<b>'+num(a.credits_remaining)+'</b><span class="muted"> / '+num(a.credits_total)+esc(pct)+'</span>'+reset+dailyLine(a.daily);
+ }
+ const total=a.wallet_total||0;
+ const left=avail!=null?avail:(a.wallet_remaining||0);
+ const used=a.wallet_used||0;
+ const pct=total>0?Math.max(0,Math.min(100,left/total*100)):0;
+ const level=pct<=10?'low':pct<=30?'warn':'';
+ const chips=pools.map(p=>{
+  const tip='总额 '+num(p.total)+' · 已用 '+num(p.used)+(p.lots>1?' · '+p.lots+' 批':'')+(p.expires_at?' · 到期 '+day(p.expires_at):'');
+  return '<span class="pool" title="'+esc(tip)+'">'+esc(p.label)+'<b>'+num(p.remaining)+'</b><i>/'+num(p.total)+'</i>'+(p.estimate?'<em>≈</em>':'')+'</span>';
+ }).join('');
+ const expiry=pools.map(p=>p.expires_at).filter(Boolean).sort()[0];
+ const notes=[];
+ if(avail!=null)notes.push('官网余额 '+num(avail));
+ notes.push('已用 '+num(used)+(a.wallet_approx?'（估算）':''));
+ if(expiry)notes.push('最近到期 '+day(expiry));
+ if(a.wallet_pending>0)notes.push('待发放 '+num(a.wallet_pending));
+ return '<div class="wallet"><div class="wallet-head"><b>'+num(left)+'</b><span class="muted">/ '+num(total)+'</span></div>'
+  +'<div class="bar '+level+'"><i style="width:'+pct.toFixed(1)+'%"></i></div>'
+  +'<div class="pools">'+chips+'</div>'
+  +'<div class="muted note">'+notes.join(' · ')+'</div>'
+  +dailyLine(a.daily)+'</div>';
+}
+function accountMsg(text,bad){const el=$('#accountMsg');el.textContent=text||'';el.className='msg'+(bad?' error':'')}
+function showAccountForm(){accountMsg('');$('#accountDialog').showModal()}
+async function makeOAuthURL(){accountMsg('生成中...');try{const d=await api('accounts?action=oauth-url');$('#oauthURL').value=d.url;accountMsg('已生成，点「打开链接」继续授权')}catch(e){accountMsg(e.message,true)}}
+function openOAuthURL(){const url=$('#oauthURL').value.trim();if(url)window.open(url,'_blank')}
+async function addAccount(){$('#authCode').value=$('#authCode').value.trim();if(!$('#authCode').value){accountMsg('先粘贴授权码再提交',true);return}accountMsg('提交中...');try{await api('accounts',{method:'POST',body:JSON.stringify({code:$('#authCode').value})});$('#accountDialog').close();$('#authCode').value='';$('#oauthURL').value='';loadAccounts()}catch(e){accountMsg(e.message,true)}}
+async function accountOp(uid,op){if(op==='delete'&&!confirm('确定删除账号 '+uid+'？'))return;try{await api(`accounts/${encodeURIComponent(uid)}/${op}`,{method:'POST'});loadAccounts()}catch(e){alert(e.message)}}
+async function loadKeys(){const d=await api('keys');state.keys=d.keys;$('#keyRows').innerHTML=d.keys.map(k=>`<tr><td>${esc(k.name)}</td><td class="mono">${esc(k.key_preview)}</td><td>${k.used_requests}${k.max_requests?' / '+k.max_requests:' / ∞'}</td><td><span class="pill ${k.enabled?'on':'off'}">${k.enabled?'启用':'禁用'}</span></td><td><button onclick="toggleKey('${k.id}',${!k.enabled})">${k.enabled?'禁用':'启用'}</button> <button class="danger" onclick="deleteKey('${k.id}')">删除</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">暂无密钥</td></tr>'}
+async function createKey(){$('#newKeyMsg').textContent='创建中...';try{const d=await api('keys',{method:'POST',body:JSON.stringify({name:$('#keyName').value,max_requests:+$('#keyMax').value||0})});$('#newKeyMsg').innerHTML='新密钥只显示一次：<b class="mono">'+esc(d.key)+'</b>';loadKeys()}catch(e){$('#newKeyMsg').textContent=e.message}}
+async function toggleKey(id,enabled){await api('keys/'+id,{method:'PATCH',body:JSON.stringify({enabled})});loadKeys()}
+async function deleteKey(id){if(!confirm('确定删除该密钥？'))return;await api('keys/'+id,{method:'DELETE'});loadKeys()}
+async function loadLogs(){const d=await api('logs?limit=200');$('#logRows').innerHTML=d.entries.map(e=>`<tr><td>${dt(e.time)}</td><td>${esc(e.key_name||e.key_id)}</td><td>${esc(e.uid)}</td><td>${esc(e.model)}</td><td class="${e.status>=400?'error':''}">${e.status}</td><td>${e.latency_ms}ms</td><td>${e.prompt_tokens}/${e.completion_tokens}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">暂无日志</td></tr>'}
+async function clearLogs(){if(confirm('确定清空日志？')){await fetch('/admin/api/logs',{method:'DELETE'});loadLogs()}}
+async function changePassword(){const password=$('#newPassword').value;if(password.length<8){$('#passwordMsg').textContent='密码至少 8 位';return}if(password!==$('#confirmPassword').value){$('#passwordMsg').textContent='两次输入的密码不一致';return}$('#passwordMsg').textContent='提交中...';try{await api('password',{method:'POST',body:JSON.stringify({password})});$('#newPassword').value='';$('#confirmPassword').value='';$('#passwordMsg').textContent='已修改，下次登录使用新密码'}catch(e){$('#passwordMsg').textContent=e.message}}
+function splitHours(value){return String(value||'').split(/[,\s]+/).map(x=>parseInt(x,10)).filter(x=>!isNaN(x))}
+async function loadConfig(){const d=await api('config');const c=d.config;$('#cfgListen').value=c.listen||'';$('#cfgAPIKey').value=c.api_key||'';$('#cfgAuthDir').value=c.auth_dir||'';$('#cfgStateFile').value=c.state_file||'';$('#cfgBaseURL').value=c.base_url||'';$('#cfgTimeout').value=c.upstream?.timeout_seconds||120;$('#cfgLogLevel').value=c.log_level||'info';$('#cfgThinkingMode').value=c.thinking?.mode||'off';$('#cfgThinkingBudget').value=c.thinking?.budget_tokens||4096;$('#cfgHardCredit').value=c.cooldown?.hard_credit||'';$('#cfgSoftRate').value=c.cooldown?.soft_rate||'';$('#cfgErrThreshold').value=c.cooldown?.err_threshold||3;$('#cfgErrCooldown').value=c.cooldown?.err_cooldown||'';$('#cfgKeepaliveInterval').value=c.schedule?.keepalive_interval||'30m';$('#cfgKeepaliveSkew').value=c.schedule?.keepalive_skew||'15m';$('#cfgAutoRecover').value=c.schedule?.auto_recover===false?'0':'1';$('#cfgKeepaliveHours').value=(c.schedule?.keepalive_hours||[]).join(',');$('#cfgDailyReward').value=c.schedule?.daily_reward===false?'0':'1';$('#cfgClaimHour').value=c.schedule?.claim_hour??0;$('#cfgClaimMinute').value=c.schedule?.claim_minute??5;$('#configText').value=JSON.stringify(c,null,2)}
+function graphicalConfig(){const _h=parseInt($('#cfgClaimHour').value,10),_m=parseInt($('#cfgClaimMinute').value,10);return {log_level:$('#cfgLogLevel').value,listen:$('#cfgListen').value.trim(),api_key:$('#cfgAPIKey').value,auth_dir:$('#cfgAuthDir').value.trim(),state_file:$('#cfgStateFile').value.trim(),base_url:$('#cfgBaseURL').value.trim(),cooldown:{hard_credit:$('#cfgHardCredit').value.trim(),soft_rate:$('#cfgSoftRate').value.trim(),err_threshold:+$('#cfgErrThreshold').value||3,err_cooldown:$('#cfgErrCooldown').value.trim()},schedule:{keepalive_interval:$('#cfgKeepaliveInterval').value.trim()||'30m',keepalive_skew:$('#cfgKeepaliveSkew').value.trim()||'15m',auto_recover:$('#cfgAutoRecover').value==='1',keepalive_hours:splitHours($('#cfgKeepaliveHours').value),daily_reward:$('#cfgDailyReward').value==='1',claim_hour:isNaN(_h)?0:_h,claim_minute:isNaN(_m)?5:_m},upstream:{timeout_seconds:+$('#cfgTimeout').value||120},thinking:{mode:$('#cfgThinkingMode').value,budget_tokens:+$('#cfgThinkingBudget').value||4096}}}
+async function saveConfig(){const msg=t=>['#configMsg','#configMsg2','#configMsg3'].forEach(s=>{const el=$(s);if(el)el.textContent=t});msg('保存中...');try{await api('config',{method:'PUT',body:JSON.stringify(graphicalConfig())});msg('已保存，重启后生效');loadConfig()}catch(e){msg(e.message)}}
+async function saveRawConfig(){$('#rawMsg').textContent='保存中...';try{const raw=JSON.parse($('#configText').value);await api('config',{method:'PUT',body:JSON.stringify(raw)});$('#rawMsg').textContent='已保存，重启后生效';loadConfig()}catch(e){$('#rawMsg').textContent=e.message}}
+async function boot(){try{await api('me');$('#login').style.display='none';loadDashboard()}catch(e){$('#login').style.display='grid'}}
+$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});boot()
+</script></body></html>

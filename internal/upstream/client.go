@@ -4,15 +4,21 @@ package upstream
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	neturl "net/url"
+	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"phanthycode2api/internal/auth"
+	"phanthycode2api/internal/logx"
 )
 
 // ErrKind 错误分类，pool 据此决定冷却时长。
@@ -24,6 +30,7 @@ const (
 	ErrSoftRate                   // 429 软限流 → 短冷却
 	ErrSessionDead                // 401/会话失效 → 禁用
 	ErrNotFound                   // 404 上游偶发 → 短冷却不累计 errCount（防雪崩）
+	ErrModelDenied                // 403 套餐不含该模型 → 账号本身健康，不冷却不计数
 	ErrServer                     // 5xx 上游故障
 	ErrClient                     // 其他 4xx / 业务错误
 )
@@ -38,6 +45,8 @@ func (k ErrKind) String() string {
 		return "session_dead"
 	case ErrNotFound:
 		return "not_found"
+	case ErrModelDenied:
+		return "model_denied"
 	case ErrServer:
 		return "server"
 	case ErrClient:
@@ -46,6 +55,10 @@ func (k ErrKind) String() string {
 		return "none"
 	}
 }
+
+// ErrAPIKeyUnsupported 上游没有 create_api_key 路由，账号只能用 access_token 兜底。
+// 这是上游的固有行为而非故障，调用方不应据此记错误日志。
+var ErrAPIKeyUnsupported = errors.New("create_api_key 不可用（上游 404），改用 access_token")
 
 // Error 带分类的上游错误。
 type Error struct {
@@ -66,10 +79,59 @@ var hardMarkers = []string{
 	"积分不足", "额度不足", "余额不足", "积分用完", "额度用尽", "没有积分",
 }
 
+// modelDeniedMarkers 套餐不含该模型的关键词。
+// 上游对未开放模型返回 403 {"error":{"code":"model_not_allowed",...}}；
+// 这是请求侧问题，不是账号问题，不能计入错误阈值触发冷却。
+var modelDeniedMarkers = []string{
+	"model_not_allowed", "model not allowed", "not allowed for this plan",
+	"model not available", "model_not_available",
+}
+
 // sessionDeadMarkers 会话失效关键词。
 var sessionDeadMarkers = []string{
 	"OAuth token has been revoked", "missing_login", "invalid_grant",
 	"session expired", "unauthorized", "invalid access token",
+}
+
+// streamDeniedMarkers 只出现在 SSE error 事件里的拒绝类错误码。
+// 上游拒绝服务时 HTTP 状态仍是 200，错误写在事件里，例如
+// {"code":"upstream_permission_denied","message":"Model service access was denied."}。
+// 实测这类拒绝与账号积分无关（同一分钟内同账号换 phanthy-pro 就能成功，
+// 且 /api/oauth/usage 显示额度未消耗），所以按请求侧问题处理，不冷却账号。
+var streamDeniedMarkers = []string{
+	"upstream_permission_denied", "permission_denied",
+	"service access was denied", "access was denied",
+}
+
+// ClassifyStreamErr 判定 SSE error 事件的类别。
+// 这类错误的 HTTP 状态恒为 200，Classify 用不上；但关键词（积分不足 /
+// 会话失效 / 模型未授权）与 HTTP 路径一致，因此复用同一批标记。
+func ClassifyStreamErr(code, msg string) ErrKind {
+	lower := strings.ToLower(code + " " + msg)
+	for _, m := range modelDeniedMarkers {
+		if strings.Contains(lower, m) {
+			return ErrModelDenied
+		}
+	}
+	for _, m := range streamDeniedMarkers {
+		if strings.Contains(lower, m) {
+			return ErrModelDenied
+		}
+	}
+	for _, m := range hardMarkers {
+		if strings.Contains(lower, strings.ToLower(m)) {
+			return ErrHardCredit
+		}
+	}
+	for _, m := range sessionDeadMarkers {
+		if strings.Contains(lower, strings.ToLower(m)) {
+			return ErrSessionDead
+		}
+	}
+	if strings.Contains(lower, "overloaded") || strings.Contains(lower, "internal error") {
+		return ErrServer
+	}
+	return ErrClient
 }
 
 // Classify 按 HTTP 状态码 + body 判定错误类别。
@@ -78,6 +140,18 @@ func Classify(status int, body string) ErrKind {
 		return ErrHardCredit
 	}
 	lower := strings.ToLower(body)
+	// 模型未授权不能绑死在 403 上：上游还可能用 424 等状态码承载
+	// upstream_permission_denied。漏判会走 NoteError 把健康账号冷却掉。
+	for _, m := range modelDeniedMarkers {
+		if strings.Contains(lower, m) {
+			return ErrModelDenied
+		}
+	}
+	for _, m := range streamDeniedMarkers {
+		if strings.Contains(lower, m) {
+			return ErrModelDenied
+		}
+	}
 	for _, m := range hardMarkers {
 		if strings.Contains(lower, strings.ToLower(m)) || strings.Contains(body, m) {
 			return ErrHardCredit
@@ -114,8 +188,23 @@ type Client struct {
 	OAuthTokenURL   string // {Base}/oauth/token
 	APIKeyURL       string // {Base}/api/oauth/phanthy_cli/create_api_key
 	ProfileURL      string // {Base}/api/oauth/profile
+	UsageURL        string // {Base}/api/oauth/usage
 	ClientID        string // phanthy-code-cli
 	OAuthBetaHeader string // oauth-2025-04-20
+	RewardsURL      string // {Base}/api/oauth/rewards
+	UsageSummaryURL string // {Base}/api/oauth/usage/summary
+
+	// DesktopKeyDir 是桌面端安装身份的落盘目录，每个账号一份。
+	// 上游的安装标识全局唯一、且按「账号 × 安装」绑定，共用一份身份会让
+	// 第二个账号拿到 desktop_installation_required，所以必须按 uid 分开。
+	DesktopKeyDir string
+
+	desktopMu  sync.Mutex
+	desktopIDs map[string]*DesktopIdentity
+
+	// apiKeyUnsupported 记录上游是否已确认没有 create_api_key 路由。
+	// 线上该接口固定 404，每次请求都试一遍等于白跑一次往返并刷一条错误日志。
+	apiKeyUnsupported atomic.Bool
 }
 
 // New 生产默认值。配置连接池减少 TLS 握手。
@@ -135,8 +224,12 @@ func New(baseURL string) *Client {
 		OAuthTokenURL:   base + "/oauth/token",
 		APIKeyURL:       base + "/api/oauth/phanthy_cli/create_api_key",
 		ProfileURL:      base + "/api/oauth/profile",
+		UsageURL:        base + "/api/oauth/usage",
 		ClientID:        "phanthy-code-cli",
 		OAuthBetaHeader: "oauth-2025-04-20",
+		RewardsURL:      base + "/api/oauth/rewards",
+		UsageSummaryURL: base + "/api/oauth/usage/summary",
+		DesktopKeyDir:   filepath.Join("data", "desktop-keys"),
 	}
 }
 
@@ -266,7 +359,11 @@ func (c *Client) CreateAPIKey(a *auth.Auth) (string, error) {
 	if strings.TrimSpace(a.AccessToken) == "" {
 		return "", fmt.Errorf("no accessToken")
 	}
-	req, err := http.NewRequest(http.MethodPost, c.APIKeyURL, nil)
+	// 该接口在上游已下线：实测会挂几十秒才返回 404 页面。给它一个远小于业务
+	// 超时的上限，避免登录 / keepalive 被这个拿不到的优化项拖住。
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.APIKeyURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -282,6 +379,10 @@ func (c *Client) CreateAPIKey(a *auth.Auth) (string, error) {
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 400 {
+		// 404 说明上游根本没有这个路由，标记后不再重试，且只在首次发现时记一条日志。
+		if resp.StatusCode == http.StatusNotFound && c.apiKeyUnsupported.CompareAndSwap(false, true) {
+			logx.Infof("upstream: create_api_key 返回 404，后续请求直接改用 access_token 兜底")
+		}
 		kind := Classify(resp.StatusCode, string(raw))
 		return "", &Error{Kind: kind, Status: resp.StatusCode, Msg: truncate(string(raw), 200)}
 	}
@@ -308,6 +409,7 @@ func (c *Client) CreateAPIKey(a *auth.Auth) (string, error) {
 }
 
 // EnsureAPIKey 若账号缺少 api_key 则自动调用 create_api_key 补齐，并原子写回。
+// 上游没有该路由时返回 ErrAPIKeyUnsupported，属预期情况，调用方无需重复记日志。
 func (c *Client) EnsureAPIKey(a *auth.Auth) error {
 	a.Lock()
 	if a.APIKey != "" {
@@ -315,6 +417,9 @@ func (c *Client) EnsureAPIKey(a *auth.Auth) error {
 		return nil
 	}
 	a.Unlock()
+	if c.apiKeyUnsupported.Load() {
+		return ErrAPIKeyUnsupported
+	}
 	key, err := c.CreateAPIKey(a)
 	if err != nil {
 		return err
@@ -323,7 +428,7 @@ func (c *Client) EnsureAPIKey(a *auth.Auth) error {
 	a.APIKey = key
 	a.Unlock()
 	if err := a.SaveAtomic(); err != nil {
-		log.Printf("ensure_api_key save uid=%s: %v", a.UID, err)
+		logx.Errorf("ensure_api_key save uid=%s: %v", a.UID, err)
 	}
 	return nil
 }
@@ -331,9 +436,11 @@ func (c *Client) EnsureAPIKey(a *auth.Auth) error {
 // ChatStream 发 chat 请求并返回原始 SSE body 流（调用方负责 Close）。
 // 非 2xx 时 rc 为 nil、body 为上游响应体、err 为 nil；只有传输层失败才返回 err。
 // 认证方式：优先 api_key（x-api-key），其次 access_token（Bearer）。
-func (c *Client) ChatStream(a *auth.Auth, body []byte) (rc io.ReadCloser, status int, respBody []byte, err error) {
+// ctx 贯穿到上游连接：下游客户端取消请求（例如用户中断）时立即释放上游连接，
+// 避免继续占用账号配额和在途连接。
+func (c *Client) ChatStream(ctx context.Context, a *auth.Auth, body []byte) (rc io.ReadCloser, status int, respBody []byte, err error) {
 	url := c.BaseAPIURL + "/v1/messages"
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -353,14 +460,14 @@ func (c *Client) ChatStream(a *auth.Auth, body []byte) (rc io.ReadCloser, status
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		log.Printf("chat_stream uid=%s: transport error: %v", a.UID, err)
+		logx.Debugf("chat_stream uid=%s: transport error: %v", a.UID, err)
 		return nil, 0, nil, err
 	}
 	if resp.StatusCode >= 400 {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		resp.Body.Close()
 		kind := Classify(resp.StatusCode, string(raw))
-		log.Printf("chat_stream uid=%s: upstream %d %s body=%s", a.UID, resp.StatusCode, kind, truncate(string(raw), 200))
+		logx.Debugf("chat_stream uid=%s: upstream %d %s body=%s", a.UID, resp.StatusCode, kind, truncate(string(raw), 200))
 		return nil, resp.StatusCode, raw, nil
 	}
 	return resp.Body, resp.StatusCode, nil, nil
@@ -368,13 +475,69 @@ func (c *Client) ChatStream(a *auth.Auth, body []byte) (rc io.ReadCloser, status
 
 // FetchProfile 查询账号信息（可用于状态展示、积分判断）。
 func (c *Client) FetchProfile(a *auth.Auth) (map[string]any, error) {
-	req, err := http.NewRequest(http.MethodGet, c.ProfileURL, nil)
+	return c.getJSON(a, c.ProfileURL)
+}
+
+// FetchUsage 查询账号的积分用量（/api/oauth/usage）。
+func (c *Client) FetchUsage(a *auth.Auth) (map[string]any, error) {
+	return c.getJSON(a, c.UsageURL)
+}
+
+// FetchUsageSummary 查询账号按天/按模型的用量明细（/api/oauth/usage/summary）。
+// 响应里的 usage_by_day_and_model 带 cost_points，可用来还原各额度批次的消耗。
+func (c *Client) FetchUsageSummary(a *auth.Auth) (map[string]any, error) {
+	return c.getJSON(a, c.UsageSummaryURL)
+}
+
+// FetchRewards 拉取账号的奖励台账（/api/oauth/rewards），自动翻页。
+// 奖励类型包括每日登录、活动奖励、推荐奖励等，是「每日开工奖励」的账本来源。
+// 翻页中途失败时返回已经拿到的部分，同时把错误一并抛出，交由调用方决定是否使用。
+func (c *Client) FetchRewards(a *auth.Auth) ([]map[string]any, error) {
+	const maxPages = 10
+	items := make([]map[string]any, 0, 40)
+	cursor := ""
+	var firstErr error
+	for page := 0; page < maxPages; page++ {
+		url := c.RewardsURL
+		if cursor != "" {
+			url += "?cursor=" + neturl.QueryEscape(cursor)
+		}
+		raw, err := c.getJSON(a, url)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			break
+		}
+		list, _ := raw["rewards"].([]any)
+		if len(list) == 0 {
+			break
+		}
+		for _, item := range list {
+			if m, ok := item.(map[string]any); ok {
+				items = append(items, m)
+			}
+		}
+		next, _ := raw["next_cursor"].(string)
+		if next == "" {
+			break
+		}
+		cursor = next
+	}
+	return items, firstErr
+}
+
+// getJSON 带上游要求的鉴权头发起 GET 并解析 JSON。
+func (c *Client) getJSON(a *auth.Auth, url string) (map[string]any, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+a.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("anthropic-beta", c.OAuthBetaHeader)
+	req.Header.Set("x-app", "cli")
 	req.Header.Set("User-Agent", "phanthycode2api/1.0")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

@@ -2,8 +2,9 @@
 // 获取 code → 交换 token + 获取 api_key → 落盘 auths/ 即生效。
 //
 // 两步模式：
-//   step=url（默认）：生成授权 URL，打开浏览器，打印 verifier，退出
-//   step=exchange -code=xxx：用 verifier 交换 token，获取 api_key，落盘
+//
+//	step=url（默认）：生成授权 URL，打开浏览器，打印 verifier，退出
+//	step=exchange -code=xxx：用 verifier 交换 token，获取 api_key，落盘
 package main
 
 import (
@@ -20,18 +21,29 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"phanthycode2api/internal/auth"
 )
 
 var (
 	baseURL  = flag.String("base-url", "https://code.phanthy.com", "Phanthy base URL")
-	outDir   = flag.String("out", "auths", "output directory for auth files")
+	outDir   = flag.String("out", exeDir("auths"), "output directory for auth files")
 	clientID = flag.String("client-id", "phanthy-code-cli", "OAuth client id")
 	step     = flag.String("step", "url", "step: url or exchange")
 	code     = flag.String("code", "", "authorization code (for step=exchange)")
 	verifier = flag.String("verifier", "", "PKCE verifier from step=url output")
 )
 
-const verifierFile = ".login-verifier"
+var verifierFile = exeDir(".login-verifier")
+
+// exeDir 把默认输入/输出路径固定到可执行文件目录，避免双击或换目录运行时找不到文件。
+func exeDir(name string) string {
+	dir, err := os.Executable()
+	if err != nil {
+		return name
+	}
+	return filepath.Join(filepath.Dir(dir), name)
+}
 
 func main() {
 	flag.Parse()
@@ -88,10 +100,26 @@ func stepExchange() {
 		fatal("verifier 为空")
 	}
 
+	// 清洗输入：可能是完整回调 URL、?code=xxx、裸 code，
+	// 也可能误带 #p2a-login 之类的 fragment（从地址栏复制时常见）。
+	// fragment 若原样发给上游，会稳定返回 invalid_grant。
+	clean := extractCode(*code)
+	if clean == "" {
+		fatal("未能从输入中解析出 code: %q", *code)
+	}
+	if clean != strings.TrimSpace(*code) {
+		fmt.Printf("已从输入中提取 code：%s\n", maskCode(clean))
+	}
+
 	// 交换 token
-	tr, err := exchangeToken(*code, v)
+	tr, err := exchangeToken(clean, v)
 	if err != nil {
-		fatal("token 交换失败: %v\n提示：若为 invalid_grant，说明 code 已过期，请重新运行 step=url", err)
+		fatal("token 交换失败: %v\n"+
+			"提示：invalid_grant 常见原因有三——\n"+
+			"  1) code 里混入了 # 之后的内容（授权码本身不含 #）；\n"+
+			"  2) code 已过期或已被使用，需重新授权；\n"+
+			"  3) 重新跑过 step=url 导致 .login-verifier 被覆盖，与当前 code 不匹配。\n"+
+			"请重新运行 step=url，授权后立即执行本命令，-code 只传裸授权码。", err)
 	}
 
 	// 获取 api_key（prod 上游该端点固定 404，官方 CLI 同样静默忽略，用 access_token 兜底）
@@ -106,6 +134,7 @@ func stepExchange() {
 	// 落盘
 	uid := fmt.Sprintf("phanthy-%d", time.Now().Unix())
 	expiresAt := time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second).Unix()
+	nickname := auth.UniqueNickname(*outDir, uid, "phanthy-"+time.Now().Format("0102"))
 	doc := map[string]any{
 		"auth": map[string]any{
 			"accessToken":  tr.AccessToken,
@@ -114,7 +143,7 @@ func stepExchange() {
 		},
 		"account": map[string]any{
 			"uid":      uid,
-			"nickname": "phanthy-" + time.Now().Format("0102"),
+			"nickname": nickname,
 		},
 		"api_key": apiKey,
 	}
@@ -153,19 +182,41 @@ func buildAuthorizeURL(base, clientID, challenge string) string {
 	return strings.TrimRight(base, "/") + "/oauth/authorize?" + q.Encode()
 }
 
-// extractCode 从用户输入中提取 code（支持完整 URL 或裸 code）。
+// extractCode 从用户输入中提取纯 code，兼容：
+//
+//	完整回调 URL   https://code.phanthy.com/oauth/code/success?code=xxx#p2a-login
+//	带前缀片段     code=xxx / ?code=xxx
+//	裸 code，可能误带 #fragment（从浏览器地址栏复制时最常见）
+//
+// 关键点：fragment 必须先剥离。OAuth 授权码本身不含 #，一旦把 #p2a-login
+// 一起发给 /oauth/token，上游会判定 code 无效并返回 invalid_grant。
 func extractCode(s string) string {
-	if u, err := url.Parse(s); err == nil && u.Scheme != "" {
+	s = strings.TrimSpace(s)
+	// 完整 URL：交给 url.Parse 取 query（fragment 不会混进 code）
+	if u, err := url.Parse(s); err == nil && u.Scheme != "" && u.Query().Get("code") != "" {
 		return u.Query().Get("code")
 	}
-	// 可能是 "code=xxx" 或裸 code
+	// 先去掉 fragment（#p2a-login 等）
+	if i := strings.IndexByte(s, '#'); i >= 0 {
+		s = s[:i]
+	}
+	// 取 code= 之后的部分（覆盖 "code=xxx" 与 "?code=xxx"）
 	if i := strings.Index(s, "code="); i >= 0 {
-		s = s[i+5:]
-		if j := strings.IndexAny(s, "& "); j >= 0 {
-			s = s[:j]
-		}
+		s = s[i+len("code="):]
+	}
+	// 截掉多余的 query 片段
+	if j := strings.IndexAny(s, "& "); j >= 0 {
+		s = s[:j]
 	}
 	return strings.TrimSpace(s)
+}
+
+// maskCode 只保留首尾各 4 位，便于确认取到的 code 是否正确又不泄露完整值。
+func maskCode(s string) string {
+	if len(s) <= 12 {
+		return s
+	}
+	return s[:4] + "…" + s[len(s)-4:]
 }
 
 type tokenResp struct {

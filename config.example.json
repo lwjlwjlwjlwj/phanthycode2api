@@ -4,6 +4,7 @@
   "auth_dir": "./auths",
   "state_file": "./data/state.json",
   "base_url": "https://code.phanthy.com",
+  "log_level": "info",
   "cooldown": {
     "hard_credit": "12h",
     "soft_rate": "60s",
@@ -11,9 +12,24 @@
     "err_cooldown": "10m"
   },
   "schedule": {
-    "keepalive_hours": [22]
+    "keepalive_interval": "30m",
+    "keepalive_skew": "15m",
+    "keepalive_hours": [],
+    "auto_recover": true,
+    "daily_reward": true,
+    "claim_hour": 0,
+    "claim_minute": 5
   },
   "upstream": {
     "timeout_seconds": 120
+  },
+  "thinking": {
+    "mode": "off",
+    "budget_tokens": 4096
+  },
+  "admin": {
+    "enabled": true,
+    "password_hash": "",
+    "data_dir": "./data/admin"
   }
 }

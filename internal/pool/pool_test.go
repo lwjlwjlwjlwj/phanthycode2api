@@ -105,3 +105,22 @@ func TestStatePersistence(t *testing.T) {
 		t.Errorf("restored state = %+v", st)
 	}
 }
+
+func TestNoteKeepalive_PersistsTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	fp := dir + "/state.json"
+
+	p := New(fp)
+	p.Add(mkAuth("a1", "k1"))
+	p.NoteKeepalive("a1")
+
+	// 新池从同一 state 文件恢复后应保留保活时间
+	p2 := New(fp)
+	st, ok := p2.Status("a1")
+	if !ok {
+		t.Fatal("account not restored")
+	}
+	if st.LastKeepaliveAt.IsZero() {
+		t.Error("last_keepalive_at 应随 state.json 持久化")
+	}
+}

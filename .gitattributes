@@ -1,0 +1,2 @@
+# Windows 启动脚本必须保持 CRLF，否则部分 cmd 解析场景会出错
+*.bat text eol=crlf
