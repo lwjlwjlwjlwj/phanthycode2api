@@ -26,8 +26,19 @@ type Config struct {
 	} `json:"cooldown"`
 
 	Schedule struct {
-		KeepaliveHours []int `json:"keepalive_hours"` // [22]
+		KeepaliveHours []int  `json:"keepalive_hours"` // [22]
+		ProbeInterval  string `json:"probe_interval"`  // 余额探测周期 "30m"；"0" = 关闭
 	} `json:"schedule"`
+
+	Fingerprint struct {
+		Enabled      bool   `json:"enabled"` // 默认 true：发送官方 CLI 指纹头（M6 证据）
+		CliVersion   string `json:"cli_version"`
+		Client       string `json:"client"`        // x-phanthy-client
+		ClientSource string `json:"client_source"` // X-Phanthy-Client-Source
+		Product      string `json:"product"`       // X-Phanthy-Product
+		UserAgent    string `json:"user_agent"`
+		DeviceJSON   string `json:"device_json"` // 预置 base64url 指纹（留空自动采集）
+	} `json:"fingerprint"`
 
 	Upstream struct {
 		TimeoutSeconds int `json:"timeout_seconds"` // 默认 120
@@ -37,6 +48,7 @@ type Config struct {
 	HardCreditDur  time.Duration `json:"-"`
 	SoftRateDur    time.Duration `json:"-"`
 	ErrCooldownDur time.Duration `json:"-"`
+	ProbeDur       time.Duration `json:"-"`
 }
 
 // Default 默认配置。
@@ -53,6 +65,9 @@ func Default() *Config {
 	c.Cooldown.ErrThresh = 3
 	c.Cooldown.ErrCooldown = "10m"
 	c.Schedule.KeepaliveHours = []int{22}
+	c.Schedule.ProbeInterval = "0"
+	c.Fingerprint.Enabled = true
+	c.Fingerprint.CliVersion = "0.2.11" // 与官方 npm 包版本对齐
 	c.Upstream.TimeoutSeconds = 120
 	return c
 }
@@ -106,6 +121,32 @@ func applyEnv(c *Config) {
 	if v := os.Getenv("P2A_ERR_COOLDOWN"); v != "" {
 		c.Cooldown.ErrCooldown = v
 	}
+	if v := os.Getenv("P2A_PROBE_INTERVAL"); v != "" {
+		c.Schedule.ProbeInterval = v
+	}
+	if v := os.Getenv("P2A_FP_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			c.Fingerprint.Enabled = b
+		}
+	}
+	if v := os.Getenv("P2A_FP_CLI_VERSION"); v != "" {
+		c.Fingerprint.CliVersion = v
+	}
+	if v := os.Getenv("P2A_FP_CLIENT"); v != "" {
+		c.Fingerprint.Client = v
+	}
+	if v := os.Getenv("P2A_FP_CLIENT_SOURCE"); v != "" {
+		c.Fingerprint.ClientSource = v
+	}
+	if v := os.Getenv("P2A_FP_PRODUCT"); v != "" {
+		c.Fingerprint.Product = v
+	}
+	if v := os.Getenv("P2A_FP_USER_AGENT"); v != "" {
+		c.Fingerprint.UserAgent = v
+	}
+	if v := os.Getenv("P2A_FP_DEVICE_JSON"); v != "" {
+		c.Fingerprint.DeviceJSON = v
+	}
 	if v := os.Getenv("P2A_TIMEOUT_SECONDS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.Upstream.TimeoutSeconds = n
@@ -123,6 +164,9 @@ func (c *Config) normalize() error {
 	}
 	if c.ErrCooldownDur, err = time.ParseDuration(c.Cooldown.ErrCooldown); err != nil {
 		return fmt.Errorf("cooldown.err_cooldown: %w", err)
+	}
+	if c.ProbeDur, err = time.ParseDuration(c.Schedule.ProbeInterval); err != nil {
+		return fmt.Errorf("schedule.probe_interval: %w", err)
 	}
 	if c.Cooldown.ErrThresh <= 0 {
 		c.Cooldown.ErrThresh = 3

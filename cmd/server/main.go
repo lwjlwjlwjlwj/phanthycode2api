@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"phanthycode2api/internal/auth"
+	"phanthycode2api/internal/fingerprint"
 	"phanthycode2api/internal/pool"
 	"phanthycode2api/internal/scheduler"
 	"phanthycode2api/internal/server"
@@ -46,11 +47,27 @@ func main() {
 
 	up := upstream.New(cfg.BaseURL)
 	up.HTTP.Timeout = time.Duration(cfg.Upstream.TimeoutSeconds) * time.Second
+	up.FP = fingerprint.New(fingerprint.Config{
+		Enabled:      cfg.Fingerprint.Enabled,
+		CliVersion:   cfg.Fingerprint.CliVersion,
+		Client:       cfg.Fingerprint.Client,
+		ClientSource: cfg.Fingerprint.ClientSource,
+		Product:      cfg.Fingerprint.Product,
+		UserAgent:    cfg.Fingerprint.UserAgent,
+		DeviceJSON:   cfg.Fingerprint.DeviceJSON,
+	})
+	if up.FP != nil {
+		log.Printf("fingerprint: enabled (client=%s source=%s product=%s)",
+			cfg.Fingerprint.Client, cfg.Fingerprint.ClientSource, cfg.Fingerprint.Product)
+	} else {
+		log.Printf("fingerprint: disabled")
+	}
 
 	sch := scheduler.New(scheduler.Config{
 		Pool:           p,
 		Upstream:       up,
 		KeepaliveHours: cfg.Schedule.KeepaliveHours,
+		ProbeInterval:  cfg.ProbeDur,
 	})
 
 	h := server.NewHandler(server.Config{
