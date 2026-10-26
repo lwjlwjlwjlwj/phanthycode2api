@@ -9,7 +9,7 @@ import (
 )
 
 const fixtureStream = `event: message_start
-data: {"type":"message_start","message":{"id":"msg_1","model":"Iris-1.0","usage":{"input_tokens":10,"output_tokens":0}}}
+data: {"type":"message_start","message":{"id":"msg_1","model":"m","usage":{"input_tokens":10,"output_tokens":0}}}
 
 event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
