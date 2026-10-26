@@ -153,7 +153,7 @@ func TestModels(t *testing.T) {
 	if out.Object != "list" || len(out.Data) != 13 {
 		t.Fatalf("models = %+v", out)
 	}
-	if out.Data[0].ID != "DeepSeek-V4" || out.Data[0].OwnedBy != "phanthy" {
+	if out.Data[0].ID != "Phanthy-fast" || out.Data[0].OwnedBy != "phanthy" {
 		t.Fatalf("first model = %+v", out.Data[0])
 	}
 }
@@ -214,8 +214,8 @@ func TestChatNonStream(t *testing.T) {
 		t.Fatalf("usage = %+v", completion.Usage)
 	}
 
-	// 上游必须收到别名映射、stream=true 与官方指纹头。
-	if gotBody["model"] != "Iris-1.0" || gotBody["stream"] != true {
+	// 上游必须收到原样透传的模型名、stream=true 与官方指纹头。
+	if gotBody["model"] != "DeepSeek-V4" || gotBody["stream"] != true {
 		t.Fatalf("upstream body = %v", gotBody)
 	}
 	if got := gotHeaders.Get("Authorization"); got != "Bearer token-acct-1" {

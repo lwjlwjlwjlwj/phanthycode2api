@@ -87,7 +87,7 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Printf("监听 %s（上游 %s，模型别名 %d 个）", cfg.Listen, cfg.BaseURL, len(protocol.ModelList()))
+		logger.Printf("监听 %s（上游 %s，展示模型 %d 个）", cfg.Listen, cfg.BaseURL, len(protocol.ModelList()))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
