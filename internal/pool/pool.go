@@ -1,5 +1,6 @@
 // Package pool 账号池：内存索引 + 冷却/禁用状态机 + state.json 持久化。
-// 挑选策略：healthy 账号中 API key 优先（有 api_key 优于无），再按 uid 排序。
+// 挑选策略：healthy 账号中「最近未使用」优先（LRU 轮转，避免首账号被选中），
+// 余额可用性作为次优先级；等效时按 uid 排序（稳定）。
 package pool
 
 import (
@@ -44,6 +45,8 @@ type Status struct {
 	Reason   string    `json:"reason,omitempty"`
 	Disabled bool      `json:"disabled"`
 	ErrCount int       `json:"err_count,omitempty"`
+	Balance  *int64    `json:"balance,omitempty"` // 最近一次余额探测值；nil=未知
+	LastUsed time.Time `json:"last_used,omitempty"`
 }
 
 type entry struct {
@@ -52,6 +55,8 @@ type entry struct {
 	reason   string
 	until    time.Time
 	errCount int
+	balance  *int64    // 余额探测值（指针判空）；nil=未知
+	lastUsed time.Time // LRU 轮转依据
 }
 
 func (e *entry) healthy(now time.Time) bool {
@@ -67,9 +72,11 @@ func (e *entry) healthy(now time.Time) bool {
 // stateFile 持久化格式。
 type stateFile struct {
 	Accounts map[string]struct {
-		Disabled bool      `json:"disabled"`
-		Reason   string    `json:"reason,omitempty"`
-		Until    time.Time `json:"until,omitempty"`
+		Disabled  bool      `json:"disabled"`
+		Reason    string    `json:"reason,omitempty"`
+		Until     time.Time `json:"until,omitempty"`
+		Balance   *int64    `json:"balance,omitempty"`
+		LastUsed  time.Time `json:"last_used,omitempty"`
 	} `json:"accounts"`
 }
 
@@ -123,12 +130,13 @@ func (p *Pool) SyncToDir(auths []*auth.Auth) {
 	}
 }
 
-// Pick 返回 healthy 中 api_key 优先的账号；无可用返回 nil。
+// Pick 返回 healthy 中最近未使用的账号；无可用返回 nil。
 func (p *Pool) Pick() *auth.Auth {
 	return p.PickExcluding(nil)
 }
 
 // PickExcluding 同上，但跳过 tried 中的 uid（请求级轮换）。
+// LRU：lastUsed 越早越优先；余额为 0 的账号次之；等效时按 uid 排序。
 func (p *Pool) PickExcluding(tried map[string]bool) *auth.Auth {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -145,17 +153,7 @@ func (p *Pool) PickExcluding(tried map[string]bool) *auth.Auth {
 			best = e
 			continue
 		}
-		// 优先选有 api_key 的
-		bHas := e.a.APIKey != ""
-		bestHas := best.a.APIKey != ""
-		if bHas != bestHas {
-			if bHas {
-				best = e
-			}
-			continue
-		}
-		// 同等条件下按 uid 排序（稳定）
-		if uid < best.a.UID {
+		if lruLess(e, best) {
 			best = e
 		}
 	}
@@ -163,6 +161,40 @@ func (p *Pool) PickExcluding(tried map[string]bool) *auth.Auth {
 		return nil
 	}
 	return best.a
+}
+
+// lruLess 判定 a 是否比 b 更应被优先选择。
+// 优先级：余额耗尽（已知为 0）排后 > lastUsed 更早（LRU） > uid 字典序。
+func lruLess(a, b *entry) bool {
+	aZero := a.balance != nil && *a.balance == 0
+	bZero := b.balance != nil && *b.balance == 0
+	if aZero != bZero {
+		return !aZero
+	}
+	if !a.lastUsed.Equal(b.lastUsed) {
+		return a.lastUsed.Before(b.lastUsed)
+	}
+	return a.a.UID < b.a.UID
+}
+
+// MarkUsed 记录账号最近被使用（LRU 轮转依据）。
+func (p *Pool) MarkUsed(uid string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if e, ok := p.byUID[uid]; ok {
+		e.lastUsed = time.Now()
+	}
+}
+
+// SetBalance 写入最近一次余额探测值；余额为 0 时不触发冷却，只影响后续挑选优先级。
+func (p *Pool) SetBalance(uid string, bal int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if e, ok := p.byUID[uid]; ok {
+		v := bal
+		e.balance = &v
+		p.saveLocked()
+	}
 }
 
 // Cooldown 冷却账号至 now+d。
@@ -260,6 +292,8 @@ func (p *Pool) statusOf(uid string, e *entry) Status {
 		Reason:   e.reason,
 		Disabled: e.disabled,
 		ErrCount: e.errCount,
+		Balance:  e.balance,
+		LastUsed: e.lastUsed,
 	}
 }
 
@@ -282,6 +316,8 @@ func (p *Pool) load() {
 			disabled: s.Disabled,
 			reason:   s.Reason,
 			until:    s.Until,
+			balance:  s.Balance,
+			lastUsed: s.LastUsed,
 		}
 	}
 }
@@ -291,19 +327,25 @@ func (p *Pool) saveLocked() {
 		return
 	}
 	sf := stateFile{Accounts: map[string]struct {
-		Disabled bool      `json:"disabled"`
-		Reason   string    `json:"reason,omitempty"`
-		Until    time.Time `json:"until,omitempty"`
+		Disabled  bool      `json:"disabled"`
+		Reason    string    `json:"reason,omitempty"`
+		Until     time.Time `json:"until,omitempty"`
+		Balance   *int64    `json:"balance,omitempty"`
+		LastUsed  time.Time `json:"last_used,omitempty"`
 	}{}}
 	for uid, e := range p.byUID {
 		sf.Accounts[uid] = struct {
-			Disabled bool      `json:"disabled"`
-			Reason   string    `json:"reason,omitempty"`
-			Until    time.Time `json:"until,omitempty"`
+			Disabled  bool      `json:"disabled"`
+			Reason    string    `json:"reason,omitempty"`
+			Until     time.Time `json:"until,omitempty"`
+			Balance   *int64    `json:"balance,omitempty"`
+			LastUsed  time.Time `json:"last_used,omitempty"`
 		}{
 			Disabled: e.disabled,
 			Reason:   e.reason,
 			Until:    e.until,
+			Balance:  e.balance,
+			LastUsed: e.lastUsed,
 		}
 	}
 	raw, err := json.MarshalIndent(sf, "", "  ")
