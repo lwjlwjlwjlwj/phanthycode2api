@@ -11,7 +11,17 @@
     "err_cooldown": "10m"
   },
   "schedule": {
-    "keepalive_hours": [22]
+    "keepalive_hours": [22],
+    "probe_interval": "0"
+  },
+  "fingerprint": {
+    "enabled": true,
+    "cli_version": "0.2.11",
+    "client": "cli",
+    "client_source": "cli",
+    "product": "phanthy_code",
+    "user_agent": "",
+    "device_json": ""
   },
   "upstream": {
     "timeout_seconds": 120
