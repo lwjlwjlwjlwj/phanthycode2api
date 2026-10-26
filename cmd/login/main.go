@@ -121,7 +121,12 @@ func stepExchange() {
 	_ = os.MkdirAll(*outDir, 0o755)
 	out := filepath.Join(*outDir, uid+".json")
 	raw, _ := json.MarshalIndent(doc, "", "  ")
-	if err := os.WriteFile(out, raw, 0o600); err != nil {
+	tmp := out + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		fatal("写文件失败: %v", err)
+	}
+	if err := os.Rename(tmp, out); err != nil {
+		os.Remove(tmp)
 		fatal("写文件失败: %v", err)
 	}
 	fmt.Printf("\n登录成功！凭证已保存: %s\n", out)
@@ -146,7 +151,8 @@ func buildAuthorizeURL(base, clientID, challenge string) string {
 	q.Set("client_id", clientID)
 	q.Set("response_type", "code")
 	q.Set("redirect_uri", "https://code.phanthy.com/oauth/code/success")
-	q.Set("scope", "user:inference user:profile user:sessions:claude_code")
+	// 与官方 CLI 请求的 6 个 scope 对齐（M6 证据：qKj 数组）
+	q.Set("scope", "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload")
 	q.Set("code_challenge", challenge)
 	q.Set("code_challenge_method", "S256")
 	q.Set("state", "p2a-login")

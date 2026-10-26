@@ -136,6 +136,7 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		tried[acct.UID] = true
+		h.cfg.Pool.MarkUsed(acct.UID) // LRU 轮转：被选中即记为最近使用
 
 		// token 临近过期 → 先 refresh（失败冷却换号）
 		if acct.NeedsRefresh(h.cfg.RefreshSkew) {
@@ -152,8 +153,8 @@ func (h *Handler) chatCompletions(w http.ResponseWriter, r *http.Request) {
 			_ = acct.SaveAtomic()
 		}
 
-		// 确保 api_key 可用（失败不阻塞，ChatStream 会用 access_token 兜底）
-		if acct.APIKey == "" {
+		// 纯 api_key 老账号（无 access_token）才补 key；有 token 的走 Bearer（官方 CLI 行为）
+		if acct.AccessToken == "" && acct.APIKey == "" {
 			if err := h.cfg.Upstream.EnsureAPIKey(acct); err != nil {
 				log.Printf("ensure_api_key uid=%s: %v (will try access_token)", acct.UID, err)
 			}
