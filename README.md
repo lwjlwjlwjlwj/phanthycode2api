@@ -9,9 +9,11 @@
 
 - 🔑 **可选鉴权** — 配置 `api_key` 后需 Bearer token 访问（空则无鉴权，便于本地调试）
 - 🔄 **OpenAI 兼容** — 无痛接入任何支持 OpenAI 格式的客户端（NextChat、ChatBox、OpenCat 等）
-- 👥 **多账号池管理** — 自动轮转账号、错误计数阈值冷却、禁用、持久化状态
+- 👥 **多账号池管理** — LRU 轮转调度（最近未用优先）、余额感知选择、错误计数阈值冷却、禁用、持久化状态
+- 🖐 **官方指纹对齐** — 按逆向证据发送官方 CLI 的 7 个 `x-phanthy-*` 请求头（含 base64url 设备指纹），/v1/messages 优先 Bearer 鉴权
+- 💰 **余额探测** — 可选周期调用 `/api/phanthy_code/models/stats`，防御性解析余额并影响选号
 - 🔁 **协议转换** — OpenAI 请求/响应 ↔ Anthropic Messages API 双向转换，流式 SSE 实时透传
-- 🔓 **OAuth 登录** — 半自动 PKCE 授权码流程，一键获取凭证
+- 🔓 **OAuth 登录** — 半自动 PKCE 授权码流程（6 scopes 对齐官方 CLI），一键获取凭证
 - ⏰ **定时 keepalive** — 保持 token 活跃，接近过期时自动刷新
 - 🗺 **模型映射** — 客户端使用商业名（DeepSeek-V4、gpt-5.6-sol 等），自动映射到上游真实模型
 - 🏗 **Go 单二进制** — 无第三方依赖，`go build` 即得
