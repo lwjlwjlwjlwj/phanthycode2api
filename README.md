@@ -23,7 +23,11 @@
 - **单收集器 SSE** — 流式与非流式共用同一个事件状态机；上游 `error` 事件不再被丢弃，空流不会被伪造成成功
 - **OAuth 登录** — PKCE（S256）+ 官方 CLI 的 6 个 scope + 随机 `state` 校验
 - **定时 keepalive** — 启动即执行一次，之后按配置小时刷新即将过期的 token；可选周期余额探测
-- **零第三方依赖** — 仅标准库，`go build` 即得单二进制
+- **协议层复用 new-api 实现** — 请求转换与 SSE 状态机由 [relaykit]（`new-api/relaykit`）
+  承载，token 估算由 [tokenkit]（`new-api/tokenkit`）承载，不在协议层自研车轮
+
+[relaykit]: https://github.com/QuantumNous/new-api/tree/main/relaykit
+[tokenkit]: https://github.com/QuantumNous/new-api/tree/main/tokenkit
 
 ## 目录结构
 
@@ -36,14 +40,14 @@ internal/
   credential/         # 4 种磁盘凭证格式解析 + 原子写（tmp + rename）
   pool/               # 账号池：LRU、余额降级、冷却、禁用、状态持久化
   phanthy/            # 上游客户端、7 个指纹头、错误分类、余额提取
-  protocol/           # OpenAI ↔ Anthropic 请求转换 + 单一 SSE 收集器
+  protocol/           # 薄封装：模型别名 + max_tokens 改写 + SSE 帧读写，复用 relaykit/tokenkit
   gateway/            # 路由、鉴权、轮转、流式/非流式转发
   keepalive/          # token 保活与余额探测
 ```
 
 ## 快速开始
 
-要求 Go ≥ 1.26.5，无第三方依赖。
+要求 Go ≥ 1.26.5，构建依赖 relaykit / tokenkit 及其传递依赖（详见 `go.mod`）。
 
 ```bash
 go build -o phanthycode2api ./cmd/server
@@ -258,3 +262,8 @@ docker build -f Dockerfile.local -t phanthycode2api:local .
 ## License
 
 MIT
+
+本项目链接了 `new-api/relaykit` 与 `new-api/tokenkit`（均为 **AGPL-3.0**）。
+AGPL-3.0 具有传染性：以网络服务方式对外提供的、链接了受 AGPL 保护的库的衍生作品，
+整体可能需按 AGPL-3.0 开源并公开对应源代码。使用前请自行评估许可合规风险；
+本项目的 MIT 声明不改变上方 AGPL 传染条款对整体作品的适用性。

@@ -10,51 +10,17 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/tokenkit"
 )
 
 // DoneFrame 是 OpenAI SSE 流的终止帧。
 const DoneFrame = "data: [DONE]\n\n"
 
-// StreamDelta 是 OpenAI chunk 中增量部分。
-type StreamDelta struct {
-	Role             string           `json:"role,omitempty"`
-	Content          string           `json:"content,omitempty"`
-	ReasoningContent string           `json:"reasoning_content,omitempty"`
-	ToolCalls        []StreamToolCall `json:"tool_calls,omitempty"`
-}
-
-// StreamToolCall 是流式工具调用增量；第一个片段带 id 与 name，后续片段只带 arguments。
-type StreamToolCall struct {
-	Index    int             `json:"index"`
-	ID       string          `json:"id,omitempty"`
-	Type     string          `json:"type,omitempty"`
-	Function *StreamFunction `json:"function,omitempty"`
-}
-
-// StreamFunction 是工具调用的函数名与参数片段。
-type StreamFunction struct {
-	Name      string `json:"name,omitempty"`
-	Arguments string `json:"arguments,omitempty"`
-}
-
-// StreamChoice 是 chunk 中的候选。
-type StreamChoice struct {
-	Index        int         `json:"index"`
-	Delta        StreamDelta `json:"delta"`
-	FinishReason *string     `json:"finish_reason"`
-}
-
-// StreamChunk 是 OpenAI chat.completion.chunk。
-type StreamChunk struct {
-	ID      string         `json:"id"`
-	Object  string         `json:"object"`
-	Created int64          `json:"created"`
-	Model   string         `json:"model"`
-	Choices []StreamChoice `json:"choices"`
-}
-
 // StreamError 表示上游在 SSE 流内部返回的 error 事件。
-// 旧实现直接丢弃该事件，这里必须向上传播。
+// relaykit 通过 ClaudeResponse.GetClaudeError() 识别该事件，这里向上传播。
 type StreamError struct {
 	Type    string
 	Message string
@@ -68,97 +34,63 @@ func (e *StreamError) Error() string {
 	return fmt.Sprintf("上游流内错误: %s", truncate(e.Raw, 256))
 }
 
-// EncodeChunk 把 chunk 编码为一个 SSE 帧。
-func EncodeChunk(chunk StreamChunk) ([]byte, error) {
-	raw, err := json.Marshal(chunk)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]byte, 0, len(raw)+8)
-	out = append(out, "data: "...)
-	out = append(out, raw...)
-	out = append(out, '\n', '\n')
-	return out, nil
+// SSEChunk 是 OpenAI chat.completion.chunk 的 SSE 帧载荷。
+// relaykit 的 ChatCompletionsStreamResponse 携带 system_fingerprint/usage 等
+// 内部字段且无 omitempty，这里用白名单结构体编码，只暴露 OpenAI 兼容字段。
+type SSEChunk struct {
+	ID      string                                    `json:"id"`
+	Object  string                                    `json:"object"`
+	Created int64                                     `json:"created"`
+	Model   string                                    `json:"model"`
+	Choices []dto.ChatCompletionsStreamResponseChoice `json:"choices"`
 }
 
-// sseEvent 是上游 Anthropic SSE 事件中会被读取的字段。
-type sseEvent struct {
-	Type    string `json:"type"`
-	Index   *int   `json:"index"`
-	Message *struct {
-		ID    string `json:"id"`
-		Model string `json:"model"`
-		Usage *struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
-	} `json:"message"`
-	ContentBlock *struct {
-		Type string `json:"type"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"content_block"`
-	Delta *struct {
-		Type         string `json:"type"`
-		Text         string `json:"text"`
-		Thinking     string `json:"thinking"`
-		PartialJSON  string `json:"partial_json"`
-		StopReason   string `json:"stop_reason"`
-		StopSequence string `json:"stop_sequence"`
-	} `json:"delta"`
-	Usage *struct {
-		InputTokens  *int `json:"input_tokens"`
-		OutputTokens *int `json:"output_tokens"`
-	} `json:"usage"`
-	Error *struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// Collector 是唯一的 SSE 收集器：流式与非流式共用同一套事件状态机。
+// Collector 是唯一的流式收集器：流式与非流式共用同一套 relaykit 事件状态机。
 //
-// 事件语义来自 re/docs/02-usage-semantics.md §3.2：
-//   - message_start        → 首个 role chunk，记录 id / input_tokens
-//   - content_block_start  → tool_use 注册工具并发出首个 tool_calls 片段
-//   - content_block_delta  → text / thinking / input_json 三类增量
-//   - message_delta        → stop_reason 与 output_tokens
-//   - error                → 必须作为错误向上传播（修正旧实现丢弃 error 事件的缺陷）
+// relaykit 承担事件解析的复杂部分：
+//   - ClaudeToChatStreamState.ConvertChunk：Anthropic content block index →
+//     OpenAI 稠密 tool_calls index 的映射与校验
+//   - StreamResponseClaude2OpenAI：单个事件 → OpenAI 流式 chunk
+//   - FormatClaudeResponseInfo：跨事件累积 id / model / ResponseText / usage
+//
+// 本收集器在 relaykit 之上只做宿主职责：SSE 帧读写、聚合非流式响应、
+// 以及按 new-api 的 ResponseText2Usage 规则用 tokenkit 补算缺失的 usage。
 type Collector struct {
 	clientModel string
 	created     int64
 
-	id       string
-	upstream string // 上游返回的 model，仅用于日志
-	started  bool
+	id        string
+	state     *relayconvert.ClaudeToChatStreamState
+	info      relayconvert.ClaudeResponseInfo
+	estPrompt int
 
 	text      strings.Builder
 	reasoning strings.Builder
 
-	toolSlot map[int]int // Anthropic content block index → 工具序号
-	tools    []ResponseToolCall
-	args     []*strings.Builder
+	tools []ResponseToolCall
+	args  []*strings.Builder
 
-	stopReason   string
-	inputTokens  int
-	outputTokens int
-	sawDelta     bool
-	sawTool      bool
+	stopReason string
+	sawFinish  bool
+	sawDelta   bool
+	sawTool    bool
 }
 
-// NewCollector 构建收集器；clientModel 是客户端请求的模型名，会回填到响应中。
-func NewCollector(clientModel string) *Collector {
+// NewCollector 构建收集器；clientModel 是客户端请求的模型名（回填响应），
+// estPrompt 是请求侧 token 估算值（usage 缺失时的 prompt 兜底）。
+func NewCollector(clientModel string, estPrompt int) *Collector {
 	return &Collector{
 		clientModel: clientModel,
 		created:     time.Now().Unix(),
 		id:          "chatcmpl-" + randomHex(12),
-		toolSlot:    make(map[int]int),
+		state:       relayconvert.NewClaudeToChatStreamState(),
+		estPrompt:   estPrompt,
 	}
 }
 
 // Run 读取 Anthropic SSE 流，把每个 OpenAI chunk 交给 onChunk（可为 nil，表示只聚合）。
-// 返回的错误包括底层读取错误与上游流内 error 事件。
-func (c *Collector) Run(r io.Reader, onChunk func(StreamChunk) error) error {
+// 返回的错误包括底层读取错误、上游流内 error 事件与 relaykit 的转换错误。
+func (c *Collector) Run(r io.Reader, onChunk func(*dto.ChatCompletionsStreamResponse) error) error {
 	reader := bufio.NewReaderSize(r, 64*1024)
 	var data []string
 
@@ -171,19 +103,12 @@ func (c *Collector) Run(r io.Reader, onChunk func(StreamChunk) error) error {
 		if strings.TrimSpace(payload) == "" || payload == "[DONE]" {
 			return nil
 		}
-		chunks, err := c.HandleEvent([]byte(payload))
-		if err != nil {
-			return err
-		}
-		if onChunk == nil {
+		var ev dto.ClaudeResponse
+		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
+			// 上游偶尔夹杂非 JSON 心跳，按噪声丢弃。
 			return nil
 		}
-		for _, chunk := range chunks {
-			if err := onChunk(chunk); err != nil {
-				return err
-			}
-		}
-		return nil
+		return c.HandleEvent(&ev, onChunk)
 	}
 
 	for {
@@ -216,130 +141,82 @@ func (c *Collector) Run(r io.Reader, onChunk func(StreamChunk) error) error {
 	return dispatch()
 }
 
-// HandleEvent 处理单个 SSE data 载荷，返回需要下发的 chunk。
-func (c *Collector) HandleEvent(payload []byte) ([]StreamChunk, error) {
-	var ev sseEvent
-	if err := json.Unmarshal(payload, &ev); err != nil {
-		// 上游偶尔会夹杂非 JSON 心跳，按噪声丢弃。
-		return nil, nil
+// HandleEvent 处理单个上游事件。
+func (c *Collector) HandleEvent(ev *dto.ClaudeResponse, onChunk func(*dto.ChatCompletionsStreamResponse) error) error {
+	if ev == nil {
+		return nil
+	}
+	// error 事件必须向上传播（修正旧实现丢弃 error 事件的缺陷）。
+	if claudeErr := ev.GetClaudeError(); claudeErr != nil {
+		return &StreamError{Type: claudeErr.Type, Message: claudeErr.Message}
 	}
 
-	switch ev.Type {
-	case "message_start":
-		if ev.Message != nil {
-			if ev.Message.ID != "" {
-				c.id = ev.Message.ID
-			}
-			if ev.Message.Model != "" {
-				c.upstream = ev.Message.Model
-			}
-			if ev.Message.Usage != nil {
-				c.inputTokens = ev.Message.Usage.InputTokens
-				if ev.Message.Usage.OutputTokens > 0 {
-					c.outputTokens = ev.Message.Usage.OutputTokens
-				}
-			}
-		}
-		if c.started {
-			return nil, nil
-		}
-		c.started = true
-		return []StreamChunk{c.chunk(StreamDelta{Role: "assistant"}, nil)}, nil
-
-	case "content_block_start":
-		if ev.ContentBlock == nil || ev.ContentBlock.Type != "tool_use" {
-			return nil, nil
-		}
-		idx := indexOf(ev.Index)
-		if _, exists := c.toolSlot[idx]; exists {
-			return nil, nil
-		}
-		slot := len(c.tools)
-		c.toolSlot[idx] = slot
-		id := ev.ContentBlock.ID
-		if id == "" {
-			id = "toolu_" + randomHex(8)
-		}
-		c.tools = append(c.tools, ResponseToolCall{
-			ID:       id,
-			Type:     "function",
-			Function: FunctionCall{Name: ev.ContentBlock.Name},
-		})
-		c.args = append(c.args, &strings.Builder{})
-		c.sawTool = true
-		return []StreamChunk{c.chunk(StreamDelta{
-			ToolCalls: []StreamToolCall{{
-				Index:    slot,
-				ID:       id,
-				Type:     "function",
-				Function: &StreamFunction{Name: ev.ContentBlock.Name, Arguments: ""},
-			}},
-		}, nil)}, nil
-
-	case "content_block_delta":
-		if ev.Delta == nil {
-			return nil, nil
-		}
-		idx := indexOf(ev.Index)
-		switch ev.Delta.Type {
-		case "text_delta":
-			if ev.Delta.Text == "" {
-				return nil, nil
-			}
-			c.text.WriteString(ev.Delta.Text)
-			c.sawDelta = true
-			return []StreamChunk{c.chunk(StreamDelta{Content: ev.Delta.Text}, nil)}, nil
-		case "thinking_delta":
-			if ev.Delta.Thinking == "" {
-				return nil, nil
-			}
-			c.reasoning.WriteString(ev.Delta.Thinking)
-			c.sawDelta = true
-			return []StreamChunk{c.chunk(StreamDelta{ReasoningContent: ev.Delta.Thinking}, nil)}, nil
-		case "input_json_delta":
-			slot, ok := c.toolSlot[idx]
-			if !ok || ev.Delta.PartialJSON == "" {
-				return nil, nil
-			}
-			c.args[slot].WriteString(ev.Delta.PartialJSON)
-			c.sawDelta = true
-			return []StreamChunk{c.chunk(StreamDelta{
-				ToolCalls: []StreamToolCall{{
-					Index:    slot,
-					Function: &StreamFunction{Arguments: ev.Delta.PartialJSON},
-				}},
-			}, nil)}, nil
-		default:
-			// signature_delta 等类型不映射到 OpenAI 输出。
-			return nil, nil
-		}
-
-	case "message_delta":
-		if ev.Delta != nil && ev.Delta.StopReason != "" {
-			c.stopReason = ev.Delta.StopReason
-		}
-		if ev.Usage != nil {
-			if ev.Usage.InputTokens != nil {
-				c.inputTokens = *ev.Usage.InputTokens
-			}
-			if ev.Usage.OutputTokens != nil {
-				c.outputTokens = *ev.Usage.OutputTokens
-			}
-		}
-		return nil, nil
-
-	case "error":
-		se := &StreamError{Raw: payload}
-		if ev.Error != nil {
-			se.Type = ev.Error.Type
-			se.Message = ev.Error.Message
-		}
-		return nil, se
-
-	default:
-		// ping / message_stop / content_block_stop 无输出。
-		return nil, nil
+	chunk, err := c.state.ConvertChunk(ev)
+	if err != nil {
+		return err
 	}
+	relayconvert.FormatClaudeResponseInfo(ev, chunk, &c.info)
+	if chunk == nil {
+		return nil
+	}
+	c.accumulate(chunk)
+	if onChunk != nil {
+		return onChunk(chunk)
+	}
+	return nil
+}
+
+// accumulate 把单个 OpenAI chunk 聚合进非流式状态。
+func (c *Collector) accumulate(oai *dto.ChatCompletionsStreamResponse) {
+	if oai == nil || len(oai.Choices) == 0 {
+		return
+	}
+	if oai.Id != "" {
+		c.id = oai.Id
+	}
+	choice := oai.Choices[0]
+	delta := choice.Delta
+
+	if delta.Content != nil && *delta.Content != "" {
+		c.text.WriteString(*delta.Content)
+		c.sawDelta = true
+	}
+	if rc := delta.GetReasoningContent(); rc != "" {
+		c.reasoning.WriteString(rc)
+		c.sawDelta = true
+	}
+	for _, tc := range delta.ToolCalls {
+		idx := 0
+		if tc.Index != nil {
+			idx = *tc.Index
+		}
+		for len(c.tools) <= idx {
+			c.tools = append(c.tools, ResponseToolCall{})
+			c.args = append(c.args, &strings.Builder{})
+		}
+		if c.tools[idx].ID == "" {
+			c.tools[idx] = ResponseToolCall{
+				ID:       tc.ID,
+				Type:     toolTypeName(tc.Type),
+				Function: FunctionCall{Name: tc.Function.Name, Arguments: tc.Function.Arguments},
+			}
+			c.sawTool = true
+		} else {
+			// 后续片段只带 arguments 增量。
+			c.args[idx].WriteString(tc.Function.Arguments)
+		}
+	}
+	if choice.FinishReason != nil && *choice.FinishReason != "" {
+		c.stopReason = *choice.FinishReason
+		c.sawFinish = true
+	}
+}
+
+func toolTypeName(t any) string {
+	if s, ok := t.(string); ok && s != "" {
+		return s
+	}
+	return "function"
 }
 
 // HasOutput 表示流中是否产生了任何有效内容。
@@ -348,20 +225,40 @@ func (c *Collector) HasOutput() bool {
 	return c.sawDelta || c.sawTool || c.stopReason != ""
 }
 
-// FinishReason 返回 OpenAI finish_reason。
+// FinishReason 返回 OpenAI finish_reason；未收到时按证据规则兜底。
 func (c *Collector) FinishReason() string {
-	return MapFinishReason(c.stopReason, len(c.tools) > 0)
+	if c.stopReason != "" {
+		return c.stopReason
+	}
+	if len(c.tools) > 0 {
+		return "tool_calls"
+	}
+	return "stop"
 }
 
 // ID 返回响应 id（优先使用上游 message.id）。
 func (c *Collector) ID() string { return c.id }
 
-// UpstreamModel 返回上游回填的模型名，未回填时为空。
-func (c *Collector) UpstreamModel() string { return c.upstream }
+// Created 返回响应时间戳。
+func (c *Collector) Created() int64 { return c.created }
 
-// Usage 返回 token 计数。
+// UpstreamModel 返回上游回填的模型名，未回填时为空。
+func (c *Collector) UpstreamModel() string { return c.info.Model }
+
+// Usage 返回 OpenAI 语义的 token 计数（含 cache 折算与缺失补算）。
 func (c *Collector) Usage() (prompt, completion int) {
-	return c.inputTokens, c.outputTokens
+	if c.info.Usage == nil {
+		return 0, 0
+	}
+	mapped := relayconvert.UsageFromClaudeUsage(c.info.Usage)
+	if mapped.PromptTokens != 0 || mapped.CompletionTokens != 0 {
+		return mapped.PromptTokens, mapped.CompletionTokens
+	}
+	// 对齐 new-api HandleStreamFinalResponse 的 ResponseText2Usage：
+	// prompt 用宿主估算值、completion 用 tokenkit.Estimate、total 求和，仅全 0 时补。
+	prompt = c.estPrompt
+	completion = tokenkit.Estimate(UpstreamModel(c.clientModel), c.info.ResponseText.String())
+	return prompt, completion
 }
 
 // Completion 把已收集的状态组装为 OpenAI 非流式响应。
@@ -407,30 +304,54 @@ func (c *Collector) Completion() *Completion {
 }
 
 // FinalChunk 返回带 finish_reason 的终止 chunk。
-func (c *Collector) FinalChunk() StreamChunk {
+// 上游 message_delta 已带 finish_reason 时返回 nil（避免重复帧）。
+func (c *Collector) FinalChunk() *dto.ChatCompletionsStreamResponse {
+	if c.sawFinish {
+		return nil
+	}
 	reason := c.FinishReason()
-	return c.chunk(StreamDelta{}, &reason)
-}
-
-func (c *Collector) chunk(delta StreamDelta, finish *string) StreamChunk {
-	return StreamChunk{
-		ID:      c.id,
-		Object:  "chat.completion.chunk",
-		Created: c.created,
-		Model:   c.clientModel,
-		Choices: []StreamChoice{{
-			Index:        0,
-			Delta:        delta,
-			FinishReason: finish,
+	return &dto.ChatCompletionsStreamResponse{
+		Object: "chat.completion.chunk",
+		Choices: []dto.ChatCompletionsStreamResponseChoice{{
+			FinishReason: &reason,
 		}},
 	}
 }
 
-func indexOf(v *int) int {
-	if v == nil {
-		return 0
+// EncodeChunk 把 relaykit 生成的 OpenAI 流式响应编码为一个 SSE data 帧，
+// 并回填宿主侧 id / created / 客户端模型名（relaykit 不保证这些字段非空）。
+func (c *Collector) EncodeChunk(oai *dto.ChatCompletionsStreamResponse) ([]byte, error) {
+	if oai == nil {
+		return nil, errors.New("空 chunk")
 	}
-	return *v
+	frame := SSEChunk{
+		ID:      oai.Id,
+		Object:  oai.Object,
+		Created: oai.Created,
+		Model:   oai.Model,
+		Choices: oai.Choices,
+	}
+	if frame.ID == "" {
+		frame.ID = c.id
+	}
+	if frame.Created == 0 {
+		frame.Created = c.created
+	}
+	if frame.Model == "" {
+		frame.Model = c.clientModel
+	}
+	if frame.Object == "" {
+		frame.Object = "chat.completion.chunk"
+	}
+	raw, err := json.Marshal(frame)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, len(raw)+8)
+	out = append(out, "data: "...)
+	out = append(out, raw...)
+	out = append(out, '\n', '\n')
+	return out, nil
 }
 
 func randomHex(n int) string {

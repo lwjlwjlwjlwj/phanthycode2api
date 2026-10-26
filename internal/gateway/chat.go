@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/QuantumNous/new-api/relaykit/dto"
+
 	"phanthycode2api/internal/phanthy"
 	"phanthycode2api/internal/pool"
 	"phanthycode2api/internal/protocol"
@@ -35,11 +37,12 @@ func (g *Gateway) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstreamBody, err := protocol.BuildAnthropicRequest(&req)
+	upstreamBody, err := protocol.BuildAnthropicRequest(r.Context(), &req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request_error", "invalid_request", err.Error())
 		return
 	}
+	estPrompt := protocol.EstimateRequestTokens(req.Model, &req)
 
 	tried := make(map[string]bool, g.MaxRotate)
 	var lastErr error
@@ -81,7 +84,7 @@ func (g *Gateway) handleChat(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		collector := protocol.NewCollector(req.Model)
+		collector := protocol.NewCollector(req.Model, estPrompt)
 		done, relayErr := g.relay(w, r, resp, collector, req.Stream)
 		if done {
 			g.pool.NoteSuccess(snap.UID)
@@ -132,8 +135,8 @@ func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, resp *http.Respo
 		flusher.Flush()
 	}
 
-	onChunk := func(chunk protocol.StreamChunk) error {
-		frame, err := protocol.EncodeChunk(chunk)
+	onChunk := func(chunk *dto.ChatCompletionsStreamResponse) error {
+		frame, err := collector.EncodeChunk(chunk)
 		if err != nil {
 			return err
 		}
@@ -166,12 +169,14 @@ func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, resp *http.Respo
 		committed = true
 	}
 
-	final, err := protocol.EncodeChunk(collector.FinalChunk())
-	if err != nil {
-		return true, nil
-	}
-	if _, err := w.Write(final); err != nil {
-		return true, nil
+	if final := collector.FinalChunk(); final != nil {
+		frame, err := collector.EncodeChunk(final)
+		if err != nil {
+			return true, nil
+		}
+		if _, err := w.Write(frame); err != nil {
+			return true, nil
+		}
 	}
 	if _, err := w.Write([]byte(protocol.DoneFrame)); err != nil {
 		return true, nil

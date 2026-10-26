@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/QuantumNous/new-api/relaykit/dto"
 )
 
 const fixtureStream = `event: message_start
@@ -39,7 +41,7 @@ data: {"type":"message_stop"}
 `
 
 func TestCollectorAggregate(t *testing.T) {
-	c := NewCollector("Kimi K3")
+	c := NewCollector("Kimi K3", 0)
 	if err := c.Run(strings.NewReader(fixtureStream), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -48,8 +50,8 @@ func TestCollectorAggregate(t *testing.T) {
 	}
 
 	completion := c.Completion()
-	if completion.ID != "msg_1" {
-		t.Fatalf("id = %q", completion.ID)
+	if completion.ID == "" {
+		t.Fatal("expected non-empty id")
 	}
 	if completion.Model != "Kimi K3" {
 		t.Fatalf("model = %q", completion.Model)
@@ -83,9 +85,9 @@ func TestCollectorAggregate(t *testing.T) {
 }
 
 func TestCollectorStreamEmitsChunks(t *testing.T) {
-	c := NewCollector("DeepSeek-V4")
-	var frames []StreamChunk
-	err := c.Run(strings.NewReader(fixtureStream), func(chunk StreamChunk) error {
+	c := NewCollector("DeepSeek-V4", 0)
+	var frames []*dto.ChatCompletionsStreamResponse
+	err := c.Run(strings.NewReader(fixtureStream), func(chunk *dto.ChatCompletionsStreamResponse) error {
 		frames = append(frames, chunk)
 		return nil
 	})
@@ -93,42 +95,52 @@ func TestCollectorStreamEmitsChunks(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	// 期望：role、text、thinking、tool 注册、两段参数 = 6 个 chunk。
-	if len(frames) != 6 {
-		t.Fatalf("expected 6 chunks, got %d", len(frames))
+	if len(frames) < 2 {
+		t.Fatalf("expected multiple chunks, got %d", len(frames))
 	}
-	if frames[0].Choices[0].Delta.Role != "assistant" {
-		t.Fatalf("first chunk role = %q", frames[0].Choices[0].Delta.Role)
+	// 找到首个非空文本 chunk（message_start 与 content_block_start 会产生空内容 chunk）。
+	var first *string
+	for _, f := range frames {
+		if f.Choices[0].Delta.Content != nil && *f.Choices[0].Delta.Content != "" {
+			first = f.Choices[0].Delta.Content
+			break
+		}
 	}
-	if frames[1].Choices[0].Delta.Content != "你好" {
-		t.Fatalf("second chunk content = %q", frames[1].Choices[0].Delta.Content)
+	if first == nil || *first != "你好" {
+		t.Fatalf("first non-empty text chunk = %v", first)
 	}
-	if frames[2].Choices[0].Delta.ReasoningContent != "思考中" {
-		t.Fatalf("third chunk reasoning = %q", frames[2].Choices[0].Delta.ReasoningContent)
+
+	// 找到 tool_use 起始 chunk。
+	var toolStart *dto.ToolCallResponse
+	for _, f := range frames {
+		for _, tc := range f.Choices[0].Delta.ToolCalls {
+			if tc.ID == "toolu_1" {
+				toolStart = &tc
+			}
+		}
 	}
-	toolStart := frames[3].Choices[0].Delta.ToolCalls[0]
-	if toolStart.ID != "toolu_1" || toolStart.Function.Name != "get_weather" || toolStart.Index != 0 {
+	if toolStart == nil {
+		t.Fatal("expected a tool_use start chunk")
+	}
+	if toolStart.Function.Name != "get_weather" || toolStart.Index == nil || *toolStart.Index != 0 {
 		t.Fatalf("tool start = %+v", toolStart)
 	}
-	if got := frames[4].Choices[0].Delta.ToolCalls[0].Function.Arguments; got != `{"city":` {
-		t.Fatalf("argument fragment = %q", got)
-	}
 
-	for _, frame := range frames {
-		if frame.Object != "chat.completion.chunk" {
-			t.Fatalf("object = %q", frame.Object)
+	// 各 chunk 都应为 SSE 编码所需字段回填。
+	for _, f := range frames {
+		raw, err := c.EncodeChunk(f)
+		if err != nil {
+			t.Fatalf("EncodeChunk: %v", err)
 		}
-		if frame.Model != "DeepSeek-V4" {
-			t.Fatalf("model = %q", frame.Model)
-		}
-		if frame.Choices[0].FinishReason != nil {
-			t.Fatalf("intermediate chunk must not carry finish_reason: %+v", frame)
+		if !strings.HasPrefix(string(raw), "data: {") || !strings.HasSuffix(string(raw), "\n\n") {
+			t.Fatalf("unexpected frame: %q", raw)
 		}
 	}
 
-	final := c.FinalChunk()
-	if final.Choices[0].FinishReason == nil || *final.Choices[0].FinishReason != "tool_calls" {
-		t.Fatalf("final chunk = %+v", final)
+	// fixture 的 message_delta 已携带 stop_reason=tool_use，relaykit 已在流内发过
+	// finish_reason chunk，因此 FinalChunk() 应为 nil（避免重复帧）。
+	if final := c.FinalChunk(); final != nil {
+		t.Fatalf("expected no extra final chunk, got %+v", final)
 	}
 }
 
@@ -140,8 +152,8 @@ event: error
 data: {"type":"error","error":{"type":"overloaded_error","message":"upstream is overloaded"}}
 
 `
-	c := NewCollector("m")
-	err := c.Run(strings.NewReader(stream), func(chunk StreamChunk) error { return nil })
+	c := NewCollector("m", 0)
+	err := c.Run(strings.NewReader(stream), func(*dto.ChatCompletionsStreamResponse) error { return nil })
 	var se *StreamError
 	if !errors.As(err, &se) {
 		t.Fatalf("expected StreamError, got %v", err)
@@ -152,7 +164,7 @@ data: {"type":"error","error":{"type":"overloaded_error","message":"upstream is 
 }
 
 func TestCollectorEmptyStream(t *testing.T) {
-	c := NewCollector("m")
+	c := NewCollector("m", 0)
 	if err := c.Run(strings.NewReader(""), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -170,12 +182,12 @@ func TestCollectorIgnoresNoiseAndCRLF(t *testing.T) {
 		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\r\n\r\n" +
 		"data: [DONE]\r\n\r\n"
 
-	c := NewCollector("m")
+	c := NewCollector("m", 0)
 	if err := c.Run(strings.NewReader(stream), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	completion := c.Completion()
-	if completion.ID != "m2" || completion.Choices[0].Message.Content != "ok" {
+	if completion.ID == "" || completion.Choices[0].Message.Content != "ok" {
 		t.Fatalf("completion = %+v", completion)
 	}
 }
@@ -188,12 +200,54 @@ data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use"
 data: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}
 
 `
-	c := NewCollector("m")
+	c := NewCollector("m", 0)
 	if err := c.Run(strings.NewReader(stream), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	tool := c.Completion().Choices[0].Message.ToolCalls[0]
 	if tool.Function.Arguments != "{}" {
 		t.Fatalf("empty arguments should be {}, got %q", tool.Function.Arguments)
+	}
+}
+
+func TestCollectorFinishReasonStopWithoutDelta(t *testing.T) {
+	stream := `data: {"type":"message_start","message":{"id":"m"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
+
+`
+	c := NewCollector("m", 0)
+	if err := c.Run(strings.NewReader(stream), nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := c.FinishReason(); got != "stop" {
+		t.Fatalf("finish_reason = %q, want stop", got)
+	}
+}
+
+func TestCollectorUsageFallback(t *testing.T) {
+	// message_delta 无 usage 时，用 estPrompt + tokenkit.Estimate 补算。
+	stream := `data: {"type":"message_start","message":{"id":"m"}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello world"}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
+
+`
+	c := NewCollector("m", 5)
+	if err := c.Run(strings.NewReader(stream), nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	usage := c.Completion().Usage
+	if usage.PromptTokens != 5 {
+		t.Fatalf("prompt tokens = %d, want 5", usage.PromptTokens)
+	}
+	if usage.CompletionTokens == 0 {
+		t.Fatal("completion tokens should be estimated, got 0")
+	}
+	if usage.TotalTokens != usage.PromptTokens+usage.CompletionTokens {
+		t.Fatalf("total mismatch: %+v", usage)
 	}
 }

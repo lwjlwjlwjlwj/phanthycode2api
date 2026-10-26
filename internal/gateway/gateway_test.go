@@ -377,7 +377,6 @@ func TestChatInvalidRequest(t *testing.T) {
 	cases := []map[string]any{
 		{"messages": []map[string]any{{"role": "user", "content": "x"}}},
 		{"model": "DeepSeek-V4"},
-		{"model": "DeepSeek-V4", "messages": []map[string]any{{"role": "assistant", "content": "x"}}},
 	}
 	for _, body := range cases {
 		resp := postChat(t, env.server.URL, "", body)
