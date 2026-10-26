@@ -72,11 +72,11 @@ func (e *entry) healthy(now time.Time) bool {
 // stateFile 持久化格式。
 type stateFile struct {
 	Accounts map[string]struct {
-		Disabled  bool      `json:"disabled"`
-		Reason    string    `json:"reason,omitempty"`
-		Until     time.Time `json:"until,omitempty"`
-		Balance   *int64    `json:"balance,omitempty"`
-		LastUsed  time.Time `json:"last_used,omitempty"`
+		Disabled bool      `json:"disabled"`
+		Reason   string    `json:"reason,omitempty"`
+		Until    time.Time `json:"until,omitempty"`
+		Balance  *int64    `json:"balance,omitempty"`
+		LastUsed time.Time `json:"last_used,omitempty"`
 	} `json:"accounts"`
 }
 
@@ -327,19 +327,19 @@ func (p *Pool) saveLocked() {
 		return
 	}
 	sf := stateFile{Accounts: map[string]struct {
-		Disabled  bool      `json:"disabled"`
-		Reason    string    `json:"reason,omitempty"`
-		Until     time.Time `json:"until,omitempty"`
-		Balance   *int64    `json:"balance,omitempty"`
-		LastUsed  time.Time `json:"last_used,omitempty"`
+		Disabled bool      `json:"disabled"`
+		Reason   string    `json:"reason,omitempty"`
+		Until    time.Time `json:"until,omitempty"`
+		Balance  *int64    `json:"balance,omitempty"`
+		LastUsed time.Time `json:"last_used,omitempty"`
 	}{}}
 	for uid, e := range p.byUID {
 		sf.Accounts[uid] = struct {
-			Disabled  bool      `json:"disabled"`
-			Reason    string    `json:"reason,omitempty"`
-			Until     time.Time `json:"until,omitempty"`
-			Balance   *int64    `json:"balance,omitempty"`
-			LastUsed  time.Time `json:"last_used,omitempty"`
+			Disabled bool      `json:"disabled"`
+			Reason   string    `json:"reason,omitempty"`
+			Until    time.Time `json:"until,omitempty"`
+			Balance  *int64    `json:"balance,omitempty"`
+			LastUsed time.Time `json:"last_used,omitempty"`
 		}{
 			Disabled: e.disabled,
 			Reason:   e.reason,

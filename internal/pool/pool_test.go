@@ -11,17 +11,56 @@ func mkAuth(uid, apiKey string) *auth.Auth {
 	return &auth.Auth{UID: uid, APIKey: apiKey}
 }
 
-func TestPick_PrefersAPIKey(t *testing.T) {
+func TestPick_LRU_Rotates(t *testing.T) {
 	p := New("")
-	p.Add(mkAuth("a1", ""))
-	p.Add(mkAuth("a2", "sk-ant-test"))
+	p.Add(mkAuth("a1", "k1"))
+	p.Add(mkAuth("a2", "k2"))
 
-	got := p.Pick()
-	if got == nil {
-		t.Fatal("nil pick")
+	// 未使用时两个 lastUsed 均为零 → 按 uid 取 a1
+	if got := p.Pick(); got == nil || got.UID != "a1" {
+		t.Fatalf("first pick = %v, want a1 (uid tie-break)", got)
 	}
-	if got.UID != "a2" {
-		t.Errorf("pick = %s, want a2（优先 api_key）", got.UID)
+	p.MarkUsed("a1")
+
+	// a1 已用 → 轮转到 a2
+	if got := p.Pick(); got == nil || got.UID != "a2" {
+		t.Fatalf("second pick = %v, want a2 (LRU rotation)", got)
+	}
+	p.MarkUsed("a2")
+
+	// 全部用过 → 回到最早使用的 a1
+	if got := p.Pick(); got == nil || got.UID != "a1" {
+		t.Fatalf("third pick = %v, want a1 (least-recently-used)", got)
+	}
+}
+
+func TestPick_BalanceZero_Deprioritized(t *testing.T) {
+	p := New("")
+	p.Add(mkAuth("a1", "k1"))
+	p.SetBalance("a1", 0)
+	p.Add(mkAuth("a2", "k2"))
+
+	// a1 余额为 0 已知 → 应跳过，先取 a2
+	if got := p.Pick(); got == nil || got.UID != "a2" {
+		t.Fatalf("pick = %v, want a2 (zero-balance deprioritized)", got)
+	}
+}
+
+func TestSetBalance_Persists(t *testing.T) {
+	dir := t.TempDir()
+	fp := dir + "/state.json"
+
+	p := New(fp)
+	p.Add(mkAuth("a1", "k1"))
+	p.SetBalance("a1", 42)
+
+	p2 := New(fp)
+	st, ok := p2.Status("a1")
+	if !ok {
+		t.Fatal("account not restored")
+	}
+	if st.Balance == nil || *st.Balance != 42 {
+		t.Errorf("restored balance = %v, want 42", st.Balance)
 	}
 }
 

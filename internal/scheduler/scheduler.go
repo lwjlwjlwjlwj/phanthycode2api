@@ -17,7 +17,7 @@ import (
 type Config struct {
 	Pool           *pool.Pool
 	Upstream       *upstream.Client
-	KeepaliveHours []int // 默认 [22]
+	KeepaliveHours []int         // 默认 [22]
 	ProbeInterval  time.Duration // 0 = 关闭余额探测
 }
 

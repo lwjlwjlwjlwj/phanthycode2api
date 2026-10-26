@@ -111,14 +111,14 @@ func Classify(status int, body string) ErrKind {
 type Client struct {
 	HTTP *http.Client
 
-	BaseAPIURL      string // https://code.phanthy.com
-	OAuthTokenURL   string // {Base}/oauth/token
-	APIKeyURL       string // {Base}/api/oauth/phanthy_cli/create_api_key
-	ProfileURL      string // {Base}/api/oauth/profile
-	ModelsURL       string // {Base}/api/phanthy_code/models（M6 发现）
-	ModelStatsURL   string // {Base}/api/phanthy_code/models/stats（M6 发现）
-	ClientID        string // phanthy-code-cli
-	OAuthBetaHeader string // oauth-2025-04-20
+	BaseAPIURL      string               // https://code.phanthy.com
+	OAuthTokenURL   string               // {Base}/oauth/token
+	APIKeyURL       string               // {Base}/api/oauth/phanthy_cli/create_api_key
+	ProfileURL      string               // {Base}/api/oauth/profile
+	ModelsURL       string               // {Base}/api/phanthy_code/models（M6 发现）
+	ModelStatsURL   string               // {Base}/api/phanthy_code/models/stats（M6 发现）
+	ClientID        string               // phanthy-code-cli
+	OAuthBetaHeader string               // oauth-2025-04-20
 	FP              *fingerprint.Headers // nil = 不发送 x-phanthy-* 指纹头
 }
 
