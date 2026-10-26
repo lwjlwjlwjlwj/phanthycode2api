@@ -87,12 +87,12 @@ curl -s http://localhost:7864/v1/models -H "Authorization: Bearer your-secret"
 curl -s http://localhost:7864/v1/chat/completions \
   -H "Authorization: Bearer your-secret" \
   -H "Content-Type: application/json" \
-  -d '{"model":"DeepSeek-V4","messages":[{"role":"user","content":"你好"}]}'
+  -d '{"model":"Phanthy-pro","messages":[{"role":"user","content":"你好"}]}'
 
 curl -N http://localhost:7864/v1/chat/completions \
   -H "Authorization: Bearer your-secret" \
   -H "Content-Type: application/json" \
-  -d '{"model":"DeepSeek-V4","stream":true,"messages":[{"role":"user","content":"数到3"}]}'
+  -d '{"model":"Phanthy-pro","stream":true,"messages":[{"role":"user","content":"数到3"}]}'
 ```
 
 ## 配置说明
@@ -151,25 +151,33 @@ curl -N http://localhost:7864/v1/chat/completions \
 | `fingerprint.device_json` | `P2A_FP_DEVICE_JSON` | `""` | 自定义设备指纹 JSON；留空则自动采集 |
 | `upstream.timeout_seconds` | `P2A_TIMEOUT_SECONDS` | `120` | 上游超时 |
 
-## 模型别名
+## 模型名处理
 
-客户端可用下列商业名，网关会映射到上游真实模型；未知名称原样透传。
+请求中的 `model` **原样透传**到上游，不做别名映射、不设 allow-list（证据
+`02-usage-semantics.md §6.3`）。旧版携带的 13 条「客户端名 → 上游模型」映射
+（Layer B，PRIOR-ART / 线上未验证）来自不可信的仓库代码，本重写已删除。
 
-| 客户端名 | 上游模型 |
+`GET /v1/models` 返回的 13 个展示名逐字取自公开定价页 `/token-plan` 的「可用模型列表」
+（PUBLIC-MARKETING 等级，`re/evidence/M6-public-model-catalog.txt:27-43`）：
+
+| # | 展示名 |
 |---|---|
-| DeepSeek-V4 | Iris-1.0 |
-| gpt-5.6-sol | Zeus-1.1-pro |
-| gpt-5.6-terra | Zeus-1.1 |
-| gpt-5.6-luna | Zeus-1.1-fast |
-| gpt-5.5 | Zeus-1.0-pro |
-| Claude Opus 4.8 | Gaia-1.2 |
-| Claude Opus 4.7 | Gaia-1.1 |
-| Claude Sonnet 4.6 | Gaia-1.0 |
-| Kimi K3 | Apollo-2.0 |
-| Kimi-k2.7-code | Apollo-1.1 |
-| Kimi K2.6 | Apollo-1.0 |
-| GLM 5.2 | Metis-1.1 |
-| GLM-5.1 | Metis-1.0 |
+| 1 | `Phanthy-fast` |
+| 2 | `Phanthy-pro` |
+| 3 | `Phanthy-ultra` |
+| 4 | `glm-5.3-flash` |
+| 5 | `glm-5.3` |
+| 6 | `glm-5.2` |
+| 7 | `kimi-k3` |
+| 8 | `kimi-k2.7-code` |
+| 9 | `deepseek-v4.1-flash-1017` |
+| 10 | `Phana-5.5o` |
+| 11 | `Phana-5.5s` |
+| 12 | `Phano-6a` |
+| 13 | `Phano-6.1s` |
+
+这些是营销展示名而非已验证的 wire 模型 ID，仅用于展示；客户端可按任意名字请求
+（原样透传），网关不校验模型名。
 
 ## API
 
@@ -184,7 +192,7 @@ OpenAI 兼容。支持 `stream`、`max_tokens` / `max_completion_tokens`、`temp
 
 ### `GET /v1/models`
 
-返回 13 个客户端模型别名（`object: "list"`）。
+返回 13 个展示模型名（`object: "list"`，取自公开定价页，见「模型名处理」）。
 
 ### `GET /status`
 
