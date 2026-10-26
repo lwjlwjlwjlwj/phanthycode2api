@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"phanthycode2api/internal/auth"
+	"phanthycode2api/internal/fingerprint"
 )
 
 // ErrKind 错误分类，pool 据此决定冷却时长。
@@ -114,8 +115,11 @@ type Client struct {
 	OAuthTokenURL   string // {Base}/oauth/token
 	APIKeyURL       string // {Base}/api/oauth/phanthy_cli/create_api_key
 	ProfileURL      string // {Base}/api/oauth/profile
+	ModelsURL       string // {Base}/api/phanthy_code/models（M6 发现）
+	ModelStatsURL   string // {Base}/api/phanthy_code/models/stats（M6 发现）
 	ClientID        string // phanthy-code-cli
 	OAuthBetaHeader string // oauth-2025-04-20
+	FP              *fingerprint.Headers // nil = 不发送 x-phanthy-* 指纹头
 }
 
 // New 生产默认值。配置连接池减少 TLS 握手。
@@ -135,9 +139,33 @@ func New(baseURL string) *Client {
 		OAuthTokenURL:   base + "/oauth/token",
 		APIKeyURL:       base + "/api/oauth/phanthy_cli/create_api_key",
 		ProfileURL:      base + "/api/oauth/profile",
+		ModelsURL:       base + "/api/phanthy_code/models",
+		ModelStatsURL:   base + "/api/phanthy_code/models/stats",
 		ClientID:        "phanthy-code-cli",
 		OAuthBetaHeader: "oauth-2025-04-20",
 	}
+}
+
+// applyAuth 按 M6 结论设置鉴权头：/v1/* 官方 CLI 只用 Bearer（并删除 x-api-key），
+// 这里 Bearer 优先；仅有 api_key 的老账号才回落 x-api-key。
+func (c *Client) applyAuth(req *http.Request, a *auth.Auth) bool {
+	if strings.TrimSpace(a.AccessToken) != "" {
+		req.Header.Set("Authorization", "Bearer "+a.AccessToken)
+		return true
+	}
+	if strings.TrimSpace(a.APIKey) != "" {
+		req.Header.Set("x-api-key", a.APIKey)
+		return true
+	}
+	return false
+}
+
+func (c *Client) applyFP(req *http.Request, sessionID string) {
+	if c.FP != nil {
+		c.FP.Set(req, sessionID, "")
+		return
+	}
+	req.Header.Set("User-Agent", "phanthycode2api/1.0")
 }
 
 // oauthEnvelope 上游 token/profile 响应统一信封。
@@ -330,7 +358,8 @@ func (c *Client) EnsureAPIKey(a *auth.Auth) error {
 
 // ChatStream 发 chat 请求并返回原始 SSE body 流（调用方负责 Close）。
 // 非 2xx 时 rc 为 nil、body 为上游响应体、err 为 nil；只有传输层失败才返回 err。
-// 认证方式：优先 api_key（x-api-key），其次 access_token（Bearer）。
+// 认证方式：按 M6 证据，官方 CLI 在 /v1/messages 只发 Bearer（且主动删除 x-api-key），
+// 因此 Bearer 优先；仅有 api_key 的老账号回落 x-api-key（PRIOR-ART 兼容）。
 func (c *Client) ChatStream(a *auth.Auth, body []byte) (rc io.ReadCloser, status int, respBody []byte, err error) {
 	url := c.BaseAPIURL + "/v1/messages"
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
@@ -339,17 +368,18 @@ func (c *Client) ChatStream(a *auth.Auth, body []byte) (rc io.ReadCloser, status
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("x-app", "cli")
-	req.Header.Set("User-Agent", "phanthycode2api/1.0")
-	if strings.TrimSpace(a.APIKey) != "" {
-		req.Header.Set("x-api-key", a.APIKey)
-	} else if strings.TrimSpace(a.AccessToken) != "" {
-		req.Header.Set("Authorization", "Bearer "+a.AccessToken)
-	} else {
-		return nil, 401, []byte(`{"error":{"code":"missing_login","message":"no api_key or access_token"}}`), nil
+	if !c.applyAuth(req, a) {
+		return nil, 401, []byte(`{"error":{"code":"missing_login","message":"no access_token or api_key"}}`), nil
 	}
-	if a.UID != "" {
-		req.Header.Set("X-Claude-Code-Session-Id", a.UID)
+	if c.FP != nil {
+		c.FP.Set(req, a.UID, "")
+	} else {
+		// 未启用指纹时保留历史行为
+		req.Header.Set("x-app", "cli")
+		req.Header.Set("User-Agent", "phanthycode2api/1.0")
+		if a.UID != "" {
+			req.Header.Set("X-Claude-Code-Session-Id", a.UID)
+		}
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
