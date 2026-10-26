@@ -59,6 +59,7 @@
 - [x] T6.8 二次复验收尾（F1/F1a 复验通过；复验新发现的 6 项文档级问题 G1–G6 已更正：`M6-index` 锚点改为章节引用以消除行号漂移、时间窗与统计口径改为可证表述、计数范围与 docs 变更表述加限定、补充 `docs/06`）→ `acceptance/M6-fixes-final.md`
 - [x] T6.9 G 轮复验的 5 项编辑级发现 H1–H5 已更正（错误章节号 2 处、会话时间窗加注、工件时间戳口径、`M6-fixes-final` 补入 M6 验收清单）→ `acceptance/M6-g-closure.md`
 - [x] T6.10 Apifox 推送链路本地 mock 端到端验证（127.0.0.1，无外部流量；`input` 为字符串、`AUTO_MERGE`、bearer + API 版本头、exit 0）→ `evidence/M4-push-mock.txt`
+- [x] T6.11 逆向报告按用户要求改为中文（内容等价、事实/锚点/数值不变，经独立 verifier 比对 HEAD 英文基线判定 PASS）→ `acceptance/M4-report-zh.md`
 
 ## 外部阻塞（需用户输入；2026-10-26 用户决定以可导入包结项，以下保留为已登记阻塞）
 - [!] B1 Apifox 直推：需 `APIFOX_ACCESS_TOKEN` + `APIFOX_PROJECT_ID`（UI 导入当前可用）。推送链路已用本地 mock 端到端验证（`evidence/M4-push-mock.txt`），仅差真实凭据
