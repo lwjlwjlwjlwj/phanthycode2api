@@ -133,6 +133,11 @@ func TestBuildAnthropicRequestToolCalls(t *testing.T) {
 	}
 	m := decode(t, body)
 
+	// 模型名原样透传（不做别名映射）。
+	if m["model"] != "Kimi K3" {
+		t.Fatalf("model = %v", m["model"])
+	}
+
 	assistant := m["messages"].([]any)[1].(map[string]any)
 	blocks := assistant["content"].([]any)
 	if len(blocks) != 2 {
