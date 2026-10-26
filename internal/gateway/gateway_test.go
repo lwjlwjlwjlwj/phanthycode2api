@@ -18,7 +18,7 @@ import (
 )
 
 const successSSE = `event: message_start
-data: {"type":"message_start","message":{"id":"msg_test","model":"Iris-1.0","usage":{"input_tokens":3,"output_tokens":0}}}
+data: {"type":"message_start","message":{"id":"msg_test","model":"gh-0","usage":{"input_tokens":3,"output_tokens":0}}}
 
 event: content_block_start
 data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
