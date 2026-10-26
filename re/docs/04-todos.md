@@ -48,6 +48,18 @@
 - [x] T5.4 OpenAPI 结构校验 + 自检（均通过）
 - [x] T5.5 交付审计报告 → `acceptance/M5.md`（PASS-WITH-GAPS，0 阻塞）
 
-## 外部阻塞（需用户输入）
-- [!] B1 Apifox 直推：需 `APIFOX_ACCESS_TOKEN` + `APIFOX_PROJECT_ID`（UI 导入当前可用）
-- [!] B2 登录态验证：需自有测试账号 / token（`BLOCKED-CRED`）
+## M6 官方 CLI 静态分析 + 新模型端点（增量）
+- [x] T6.1 npm registry 元数据 + tarball 静态抽取（仅 `tar -xzf` + 字节切片，未安装/未执行/未导入）→ `evidence/M6-npm-package.json`、`evidence/M6-cli-config.txt`
+- [x] T6.2 两条新端点匿名探测（`OPTIONS`/`GET`/`HEAD`，匿名、≥1.1 s 间隔）→ `evidence/M6-new-endpoint-probes.txt`
+- [x] T6.3 公开定价页模型目录抓取（13 别名 + 积分倍率 + 4 档套餐）→ `evidence/M6-public-model-catalog.txt`
+- [x] T6.4 证据索引、分级与 M1 差异说明 → `evidence/M6-index.md`
+- [x] T6.5 M6b 文档集成：端点目录 EP-16/EP-17、调用语义、SDD 上游调用清单、里程碑、OpenAPI `phanthyModelsGet`/`modelStatsGet`、IMPORT、逆向报告；活动文档端点计数统一为 17
+- [x] T6.6 独立验收（verifier 子 agent：PASS-WITH-GAPS，0 阻塞 / 6 非阻塞 D1–D6）→ `acceptance/M6.md`
+- [x] T6.7 缺陷修复 + 独立复验（D1–D6 全部关闭，R1–R4 PASS；残留记账项 F1/F1a 已更正）→ `acceptance/M6-fixes.md`
+- [x] T6.8 二次复验收尾（F1/F1a 复验通过；复验新发现的 6 项文档级问题 G1–G6 已更正：`M6-index` 锚点改为章节引用以消除行号漂移、时间窗与统计口径改为可证表述、计数范围与 docs 变更表述加限定、补充 `docs/06`）→ `acceptance/M6-fixes-final.md`
+- [x] T6.9 G 轮复验的 5 项编辑级发现 H1–H5 已更正（错误章节号 2 处、会话时间窗加注、工件时间戳口径、`M6-fixes-final` 补入 M6 验收清单）→ `acceptance/M6-g-closure.md`
+- [x] T6.10 Apifox 推送链路本地 mock 端到端验证（127.0.0.1，无外部流量；`input` 为字符串、`AUTO_MERGE`、bearer + API 版本头、exit 0）→ `evidence/M4-push-mock.txt`
+
+## 外部阻塞（需用户输入；2026-10-26 用户决定以可导入包结项，以下保留为已登记阻塞）
+- [!] B1 Apifox 直推：需 `APIFOX_ACCESS_TOKEN` + `APIFOX_PROJECT_ID`（UI 导入当前可用）。推送链路已用本地 mock 端到端验证（`evidence/M4-push-mock.txt`），仅差真实凭据
+- [!] B2 登录态验证：需自有测试账号 / token（`BLOCKED-CRED`）；M6 的 `GET /api/phanthy_code/models` 与 `/models/stats` 成功体同样依赖该 token

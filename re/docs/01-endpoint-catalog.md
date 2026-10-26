@@ -1,8 +1,13 @@
 # 01 · Endpoint Catalog — `https://code.phanthy.com/`
 
-Milestone: **M2 / T2.1** · Author: reverse-engineering analyst (M2) · Language: English
-Document status: complete for the anonymous surface. Authenticated request/response bodies remain
-`BLOCKED-CRED` (see §6).
+Milestone: **M2 / T2.1**, extended in **M6b** · Author: reverse-engineering analyst (M2), M6b
+documentation-integration engineer · Language: English
+Document status: complete for the anonymous surface, now covering **17 endpoints** (`EP-01` … `EP-17`).
+Authenticated request/response bodies remain `BLOCKED-CRED` (see §6).
+
+M6b change log: added `EP-16` / `EP-17` (the two model-discovery endpoints confirmed live and anonymously in
+M6), the official-CLI header family, the client-requested scope delta, and a clearly separated
+"static-only / unverified" subsection. No M1 fact was re-graded; historical acceptance reports are untouched.
 
 ---
 
@@ -11,9 +16,10 @@ Document status: complete for the anonymous surface. Authenticated request/respo
 ### 1.1 Scope
 
 This catalog enumerates every HTTP endpoint of `https://code.phanthy.com/` that is either (a) directly
-observed in the M1 evidence package, or (b) asserted by the in-repo Go implementation as an upstream
-contract. It records method, URL, auth scheme, parameters, response shape, error responses, observed
-status codes and an evidence anchor for each row.
+observed in the M1 or M6 evidence packages, (b) asserted by the in-repo Go implementation as an upstream
+contract, or (c) asserted as an outbound call by the official npm CLI's static bundle (M6). It records method,
+URL, auth scheme, parameters, response shape, error responses, observed status codes and an evidence anchor for
+each row.
 
 Out of scope: the marketing pages reachable from `/sitemap.xml` (content-only SEO surface, no protocol
 information), and the untrusted repository `https://github.com/witt3rd/oh-my-hermes` (never read, run or
@@ -28,11 +34,17 @@ installed — policy at `00-governance.md:22-32`).
 | M1 index compiled | `2026-10-26T06:16:58+08:00` | `M1-index.md:16` |
 | M1 independent acceptance | `2026-10-26T06:42:00+08:00`, verdict `PASS-WITH-GAPS`, 0 blocking | `acceptance/M1.md:8-9, 16-21` |
 | M2 authoring | `2026-10-26` (no new network capture) | this run |
-| identity used for all live facts | anonymous: no `Authorization`, no `Cookie`, no `x-api-key` | `M1-anon-probe-matrix.txt:6` |
+| M6 capture window (new endpoints) | `2026-10-26T08:20:25+08:00` → `08:20:33+08:00` (= `00:20:25Z` → `00:20:33Z`) | `M6-new-endpoint-probes.txt:4` |
+| M6 npm/static window | `2026-10-26T08:18:27+08:00` → `08:27:24+08:00` (operator session bounds; artifact timestamps `08:19:00` → `08:22:00`, last write `08:27:09`) | `M6-index.md` §1 (capture metadata) |
+| npm package inspected (static only, never executed) | `@phanthy/phanthy-codeo@0.2.11`, tarball sha256 `3134d33d…4d80c`, 969 files / 76,873,667 B | `M6-npm-package.json:13-18, 44-65` |
+| public pricing page hash | `2abf943b6cab2090ed737618f76b03473319dc9e1704a90840f8c061cb40be8a` | `M6-public-model-catalog.txt:7` |
+| M6b authoring | `2026-10-26` (documentation only; **zero** network requests) | this run |
+| identity used for all live facts | anonymous: no `Authorization`, no `Cookie`, no `x-api-key` | `M1-anon-probe-matrix.txt:6`; `M6-new-endpoint-probes.txt:6` |
 
-**M2 issued zero network requests.** Every `VERIFIED` statement below is inherited from M1 and carries an
-M1 file:line anchor. Anything not in M1 is labelled `PRIOR-ART` (in-repo Go/README) or `INFERRED`
-(protocol reasoning) and is never presented as live-verified.
+**M2 issued zero network requests; M6b issued zero network requests.** Every `VERIFIED` statement below is
+inherited from M1 or M6 and carries a file:line anchor. Anything not in M1/M6 is labelled `PRIOR-ART` (in-repo
+Go/README or the official CLI's static bundle) or `INFERRED` (protocol reasoning) and is never presented as
+live-verified.
 
 ### 1.3 Methodology
 
@@ -46,6 +58,11 @@ M1 file:line anchor. Anything not in M1 is labelled `PRIOR-ART` (in-repo Go/READ
    different confidence, both are stated separately rather than averaged.
 5. Where the M1 acceptance report flagged a numeric inconsistency, the per-file value is used instead of
    the summary value (see §1.6).
+6. **M6b pass:** read the five M6 evidence files that existed at that point (a sixth, `M6-cli-install.txt`, was
+   added later during the D2 fix), then reconciled them against this catalog. The two new paths
+   were confirmed from the raw probe dumps (`M6-new-endpoint-probes.txt`), traced back to their call sites in the
+   official client (`M6-cli-config.txt`), and given `VERIFIED-LIVE` existence / `BLOCKED-CRED` body grades. No
+   new request was issued and no M1 row was re-graded.
 
 ### 1.4 Evidence grades
 
@@ -54,7 +71,16 @@ M1 file:line anchor. Anything not in M1 is labelled `PRIOR-ART` (in-repo Go/READ
 | `VERIFIED` | Directly observed on the live target during M1; anchored to an evidence file:line. | May be stated as fact about the target on the capture date. |
 | `PRIOR-ART` | Derived only from the in-repo Go implementation / README; anchored to `file:line` in `/workspace`. | Describes what this repository does, **not** what the target does. Never promoted to VERIFIED. |
 | `INFERRED` | Reasoned from OIDC metadata, RFCs or naming convention; the basis is stated inline. | A hypothesis with an explicit foundation; must be re-tested with a token. |
-| `BLOCKED-CRED` | Requires the user's own token / authorization code; no request has been or will be made by M2. | Recorded as unknown. No request/response payload is fabricated. |
+| `BLOCKED-CRED` | Requires the user's own token / authorization code; no request has been or will be made by M2 or M6b. | Recorded as unknown. No request/response payload is fabricated. |
+
+M6 introduced three finer grades, used for the M6-derived rows only (they are refinements of the four above and
+never upgrade a `PRIOR-ART` claim into a live one):
+
+| grade | definition | allowed use |
+|---|---|---|
+| `VERIFIED-LIVE` | Directly observed on the live target during the **M6** anonymous capture window, anchored to `M6-new-endpoint-probes.txt`. | May be stated as fact for the M6 capture date (existence and auth gate only). |
+| `VERIFIED-STATIC` | Exact byte string inside the official npm package `@phanthy/phanthy-codeo@0.2.11`, with file sha256 + offset (`M6-cli-config.txt`). The package was never imported, installed or executed. | Describes what the official **client** does, not what the target enforces. |
+| `PUBLIC-MARKETING` | Rendered on a public page with no auth; not an API contract (`M6-public-model-catalog.txt`). | Evidence of what the operator advertises, never a specification. |
 
 ### 1.5 Existence-status vocabulary
 
@@ -94,6 +120,9 @@ text only (`M0-preflight.json:20`; policy `00-governance.md:22-32`).
 `auth` gives the **exact header names** where known. `grade` separates existence evidence from semantic
 evidence; where they differ both are shown.
 
+**Count: 17 endpoints, `EP-01` … `EP-17`.** `EP-01`–`EP-15` inherit from M1 (`M1-index.md:54-74`); `EP-16` and
+`EP-17` were added in M6 and are `VERIFIED-LIVE` for existence only (`M6-new-endpoint-probes.txt`).
+
 | ID | method | path | auth | purpose | existence status | evidence grade | evidence anchor |
 |---|---|---|---|---|---|---|---|
 | EP-01 | GET | `/` | none | Next.js web app shell | `EX-200` | VERIFIED | `M1-anon-probe-matrix.txt:59, 87-101`; `M1-root-headers.txt:7-20` |
@@ -111,6 +140,8 @@ evidence; where they differ both are shown.
 | EP-13 | GET | `/api/public-assets` (via 308 from `/api/public-assets/`) | unknown | Public-asset surface (target not followed) | `EX-308` | VERIFIED (redirect only); INFERRED (target semantics) | `M1-anon-probe-matrix.txt:77, 247-255`; `M1-js-static-analysis.txt:59, 62` |
 | EP-14 | GET | `/robots.txt` | none | Crawler policy | `EX-200` | VERIFIED | `M1-anon-probe-matrix.txt:80, 369-402`; `M1-options-matrix.txt:31` |
 | EP-15 | GET | `/sitemap.xml` | none | SEO sitemap (841 URLs) | `EX-200` | VERIFIED | `M1-anon-probe-matrix.txt:81, 404-438`; `M1-options-matrix.txt:32` |
+| EP-16 | GET | `/api/phanthy_code/models` | `Authorization: Bearer <access_token>` (VERIFIED-LIVE as required) | Model catalogue for the `phanthy_code` product; hard-coded by the official CLI as `models` | `EX-401` + `OPTIONS 204 allow: GET, HEAD, OPTIONS` | VERIFIED-LIVE (existence + auth gate); VERIFIED-STATIC (client call site); BLOCKED-CRED (success body) | `M6-new-endpoint-probes.txt:25-111`; `M6-cli-config.txt:35, 88-99, 168-175` |
+| EP-17 | GET | `/api/phanthy_code/models/stats` | `Authorization: Bearer <access_token>` (VERIFIED-LIVE as required) | Model statistics for the same product; hard-coded by the official CLI as `modelStats` | `EX-401` + `OPTIONS 204 allow: GET, HEAD, OPTIONS` | VERIFIED-LIVE (existence + auth gate); VERIFIED-STATIC (client call site); BLOCKED-CRED (success body) | `M6-new-endpoint-probes.txt:114-198`; `M6-cli-config.txt:35, 88-99, 176-181` |
 
 Note on method discovery: 405 responses on API routes carry **no** `Allow` header, so `OPTIONS` is the only
 reliable method oracle (`M1-anon-probe-matrix.txt:447-448`). `OPTIONS /` is itself anomalous (400, empty
@@ -438,6 +469,59 @@ body) and yields no method list (`M1-options-matrix.txt:14, 37-52`).
 - **Evidence:** `M1-anon-probe-matrix.txt:81, 404-438`; `M1-options-matrix.txt:32`; `acceptance/M1.md:48`.
 - **Grade:** VERIFIED.
 
+### 3.16 EP-16 · `GET /api/phanthy_code/models` — model catalogue (product-scoped)
+
+- **Method / full URL:** `GET https://code.phanthy.com/api/phanthy_code/models`
+  (`OPTIONS` → `204`, `allow: GET, HEAD, OPTIONS` — `M6-new-endpoint-probes.txt:39-51`).
+- **Existence:** `EX-401` (GET/HEAD) plus `OPTIONS 204`. The path was absent from the M1 19-path probe matrix, which
+  tested `/v1/models` instead (`M6-new-endpoint-probes.txt:218-219`).
+- **Auth (VERIFIED-LIVE as required):** `Authorization: Bearer <access_token>`. Anonymous GET returns
+  `401 application/json`, **79 B**, `{"error":{"code":"missing_login","message":"Bearer access token is required."}}`,
+  with `www-authenticate: Bearer realm="phanthy-code", error="invalid_request",
+  error_description="Bearer access token is required."` (`M6-new-endpoint-probes.txt:60-83`). HEAD returns the same
+  status and headers with no body (`:85-106`).
+- **Auth (VERIFIED-STATIC, client side):** the official CLI calls this path with
+  `Authorization: Bearer <token>`, `User-Agent: phanthy-codeo/<version>` and `x-phanthy-product: phanthy_code`, and
+  **no** `x-api-key` and no `Accept` header (`M6-cli-config.txt:168-175`). If no local token exists the call is
+  skipped entirely.
+- **Parameters:** none observed. `INFERRED`: none required — the endpoint is product-scoped by its path segment.
+- **Success response shape:** `BLOCKED-CRED` — never observed; no credential was available and none was attempted.
+  The client parses `response.json()` and treats a non-`ok` response as "no catalogue"
+  (`M6-cli-config.txt:174`). **No fields are asserted here.** The public `/token-plan` page advertises 13 display
+  aliases (`M6-public-model-catalog.txt:27-43`), but no linkage between that page and this payload is established.
+- **Error responses:** only the `missing_login` envelope was observed. Behaviour for an expired/invalid token is
+  `UNKNOWN` (`M6-new-endpoint-probes.txt:213-215`).
+- **Observed status codes:** `204` (OPTIONS), `401` (GET), `401` (HEAD). `POST` is outside the advertised `Allow`
+  set and was not attempted; a `405` for it is `INFERRED`.
+- **Infrastructure headers:** `via: kong/2.5.1`, `server: TencentEdgeOne`, `eo-cache-status: MISS`; **no**
+  `access-control-*`, **no** rate-limit headers, no `content-length` on the 401 (chunked)
+  (`M6-new-endpoint-probes.txt:18-22, 81`).
+- **Evidence:** `M6-new-endpoint-probes.txt:25-111`; `M6-cli-config.txt:35 (endpoint map), 88-99`;
+  `M6-index.md` §3.1–3.2, §4.
+- **Grade:** **VERIFIED-LIVE (existence) / BLOCKED-CRED (success body)**; client call site VERIFIED-STATIC.
+
+### 3.17 EP-17 · `GET /api/phanthy_code/models/stats` — model statistics (product-scoped)
+
+- **Method / full URL:** `GET https://code.phanthy.com/api/phanthy_code/models/stats`
+  (`OPTIONS` → `204`, `allow: GET, HEAD, OPTIONS` — `M6-new-endpoint-probes.txt:128-140`).
+- **Existence:** `EX-401` (GET/HEAD) plus `OPTIONS 204`; also absent from the M1 matrix.
+- **Auth (VERIFIED-LIVE as required):** identical guard to EP-16. The 401 body is **byte-identical** (79 B,
+  sha256 `abeec43bb27c7cbb7c6cd3fa3bbdee2bb9f953de4f6d18d648a416d92116ebe7`) and the `WWW-Authenticate` challenge is
+  the same (`M6-new-endpoint-probes.txt:154-193, 204-210`).
+- **Auth (VERIFIED-STATIC, client side):** `Authorization: Bearer <token>`, `Accept: application/json`,
+  `User-Agent: phanthy-codeo/<version>`, `x-phanthy-product: phanthy_code`, plus a client `AbortSignal` with a
+  **5 s** timeout; the URL is overridable (`A.url ?? nFA.modelStats`) (`M6-cli-config.txt:176-181`).
+- **Parameters:** none observed on the wire. The client-side URL override is a code path, **not** a query parameter
+  that has been observed.
+- **Success response shape:** `BLOCKED-CRED`. The client only does `response.ok ? response.json() : undefined` and
+  swallows all errors (`M6-cli-config.txt:181`). **No fields are asserted.** Whether this endpoint carries credit
+  ratios matching the public `/token-plan` table is `UNVERIFIED` (`M6-new-endpoint-probes.txt:216`).
+- **Error responses:** only `missing_login` observed; expired/invalid-token taxonomy `UNKNOWN`.
+- **Observed status codes:** `204` (OPTIONS), `401` (GET), `401` (HEAD).
+- **Infrastructure headers:** same as EP-16.
+- **Evidence:** `M6-new-endpoint-probes.txt:114-198`; `M6-cli-config.txt:35, 176-181`; `M6-index.md` §3.1–3.2, §4.
+- **Grade:** **VERIFIED-LIVE (existence) / BLOCKED-CRED (success body)**; client call site VERIFIED-STATIC.
+
 ---
 
 ## 4. Negative inventory
@@ -453,7 +537,7 @@ so size alone is not a reliable discriminator (`M1-index.md:137-143`).
 | `/api/oauth/phanthy_cli/create_api_key` | GET 404, OPTIONS 404 | 26,614 B | `M1-anon-probe-matrix.txt:67`; `M1-options-matrix.txt:20` | The API-key minting route used by prior art does not exist in production. |
 | `/api/oauth/claude_cli/create_api_key` | GET 404, OPTIONS 404 | 26,613 B | `M1-anon-probe-matrix.txt:68`; `M1-options-matrix.txt:21` | The renamed sibling is also absent. |
 | `/v1/messages/count_tokens` | GET 404, OPTIONS 404 | 26,598 B | `M1-anon-probe-matrix.txt:72`; `M1-options-matrix.txt:24` | Token counting is not a separate endpoint. |
-| `/v1/models` | GET 404, OPTIONS 404 | 26,579 B | `M1-anon-probe-matrix.txt:73`; `M1-options-matrix.txt:25` | No model catalogue over HTTP. |
+| `/v1/models` | GET 404, OPTIONS 404 | 26,579 B | `M1-anon-probe-matrix.txt:73`; `M1-options-matrix.txt:25` | No model catalogue under the `/v1` (Anthropic-compatible) prefix. **Refined by M6:** a catalogue does exist at `GET /api/phanthy_code/models` (EP-16), behind a bearer guard. |
 | `/api/health` | GET 404, OPTIONS 404 | 26,580 B | `M1-anon-probe-matrix.txt:78`; `M1-options-matrix.txt:29` | No health endpoint under `/api`. |
 | `/healthz` | GET 404, OPTIONS 404 | 26,573 B | `M1-anon-probe-matrix.txt:79`; `M1-options-matrix.txt:30` | No health endpoint at root. |
 
@@ -490,13 +574,26 @@ a static image path, not an API, and is excluded here (caveat D7 in §1.6).
 
 ### 5.2 Scopes
 
+**Server-advertised = 5; official-CLI-requested = 6. The delta is `org:create_api_key`.**
+
 | scope | status | anchor |
 |---|---|---|
-| `user:profile` | advertised; requested by prior art | `M1-openid-configuration.json:21`; `cmd/login/main.go:149` |
-| `user:inference` | advertised; requested by prior art | `M1-openid-configuration.json:22`; `cmd/login/main.go:149` |
-| `user:sessions:claude_code` | advertised; requested by prior art | `M1-openid-configuration.json:23`; `cmd/login/main.go:149` |
-| `user:mcp_servers` | advertised; **never requested** by prior art — purpose unknown | `M1-openid-configuration.json:24` |
-| `user:file_upload` | advertised; **never requested** by prior art — purpose unknown | `M1-openid-configuration.json:25` |
+| `user:profile` | advertised; requested by prior art **and** by the official CLI | `M1-openid-configuration.json:21`; `cmd/login/main.go:149`; `M6-cli-config.txt:79` |
+| `user:inference` | advertised; requested by prior art **and** by the official CLI | `M1-openid-configuration.json:22`; `cmd/login/main.go:149`; `M6-cli-config.txt:79` |
+| `user:sessions:claude_code` | advertised; requested by prior art **and** by the official CLI | `M1-openid-configuration.json:23`; `cmd/login/main.go:149`; `M6-cli-config.txt:79` |
+| `user:mcp_servers` | advertised; **not** requested by the prior art, but **is** requested by the official CLI | `M1-openid-configuration.json:24`; `M6-cli-config.txt:79` |
+| `user:file_upload` | advertised; **not** requested by the prior art, but **is** requested by the official CLI | `M1-openid-configuration.json:25`; `M6-cli-config.txt:79` |
+| `org:create_api_key` | **NOT advertised server-side** (the discovery document lists only the five above) yet **requested by the official CLI** | `M1-openid-configuration.json:20-26`; `M6-cli-config.txt:79`; `M6-index.md` §3.4 |
+
+Notes on the delta:
+
+- The CLI's scope array is a **client-side request list** extracted verbatim from
+  `dist/tui-worker.js` (`M6-cli-config.txt:75-86`); it is not proof that the authorization server grants any of
+  them.
+- Whether the AS accepts `org:create_api_key` is **not established**. It is notable because M1 found both
+  `create_api_key` routes returning the HTML 404 shell (§4.1) while `claude_cli/roles` kept its 401 guard: the
+  official client asks for a capability the discovery document does not advertise. Testing the authorize endpoint
+  would require an interactive login and was out of scope for M6/M6b (`BLOCKED-CRED`).
 
 No `openid` scope exists, consistent with the absence of `userinfo_endpoint` and of ID-token metadata
 (`M1-index.md:122-128`).
@@ -526,7 +623,62 @@ Both `/api/oauth/phanthy_cli/create_api_key` and `/api/oauth/claude_cli/create_a
   (`cmd/login/main.go:256-269`; `internal/upstream/client.go:292-307`).
 
 Statement of intent, not a live fact: on this target the **access token is used as the `/v1/messages`
-credential**. That is `PRIOR-ART` only; the live server may reject Bearer on `/v1/*` (`BLOCKED-CRED`, §6).
+credential**. That is `PRIOR-ART` plus `VERIFIED-STATIC` (§5.5); the live server may still reject Bearer on
+`/v1/*` (`BLOCKED-CRED`, §6).
+
+### 5.5 Credential scheme on `POST /v1/messages` — the official client uses Bearer, never `x-api-key`
+
+M6 statically resolved a question M2 could only leave open. The official CLI's Phanthy provider is an
+Anthropic-SDK-compatible provider whose custom `fetch` **deletes `x-api-key`** and **sets
+`Authorization: Bearer <access token>`**, then sets `x-phanthy-product: phanthy_code`,
+`X-Phanthy-Client-Source: cli`, a `User-Agent: <provider name>/<version>` and a freshly regenerated
+`x-phanthy-request` UUID (`M6-cli-config.txt:145-157`).
+
+| scheme on `/v1/messages` | status after M6 | anchor |
+|---|---|---|
+| `Authorization: Bearer <access_token>` | **CLI-observed (VERIFIED-STATIC)**: the only scheme the official client sends; `x-api-key` is explicitly removed | `M6-cli-config.txt:157` |
+| `x-api-key: <api_key>` | **NOT used by the official client on the Phanthy message path**. The client explicitly calls `F.delete("x-api-key")` there; `x-api-key` still appears elsewhere in the bundle only for generic third-party providers and redaction lists. Retained here only as an unverified, prior-art possibility | `internal/upstream/client.go:344-345` (prior art); `M6-cli-config.txt:157,204-212` (deletion + scoped absence) |
+
+Consequences for modelling: the official client never sends `x-api-key` on the message path, and its bundle
+contains no `x-api-key` usage on that path at all. `x-api-key` must therefore stay labelled **unverified
+possibility** in documentation and must not be described as "preferred". The wire-level acceptance of Bearer by
+`/v1/*` is still `BLOCKED-CRED` — only the client's intent has been established.
+
+Two further static facts that are **not** resolved: `nFA.messages` (the endpoint-map entry
+`https://code.phanthy.com/v1/messages`) is **never dereferenced** (0 occurrences), and the provider's `baseURL`
+is `${Kh}/v1` while the bundled SDK posts to the absolute path `/v1/messages`, so the effective URL could be
+`/v1/messages` **or** `/v1/v1/messages`. M1 proved `/v1/messages` exists; M6 sent no POST
+(`M6-cli-config.txt:145-157`; `M6-index.md` §3.8).
+
+### 5.6 Header family used by the official CLI
+
+All seven names are namespaced and must be reproduced with the **exact casing** shown — two of them capitalise
+`X-Phanthy`, five use lowercase `x-phanthy-` (`M6-cli-config.txt:58-73`).
+
+| # | header (exact) | field in the CLI map | purpose / observed value | anchor |
+|---|---|---|---|---|
+| 1 | `x-phanthy-client` | `client` | Client discriminator; sent with the message request headers | `M6-cli-config.txt:64, 190-193` |
+| 2 | `X-Phanthy-Client-Source` | `clientSource` | Request origin marker; values seen in the bundle are `cli` (message path) and `phanthy-codeo` (telemetry flush) | `M6-cli-config.txt:64, 136, 157` |
+| 3 | `x-phanthy-cli-device` | `device` | **Host fingerprint**: `base64url(JSON.stringify(...))` of hostname, username, platform, arch, OS release, up to 32 IPv4 candidates, interfaces and default routes (max 32) — privacy observation, see §5.7 | `M6-cli-config.txt:195-201` |
+| 4 | `X-Phanthy-Product` | `product` | Product discriminator; values seen are `phanthy_code` and `phanthy_codeo` | `M6-cli-config.txt:64, 136, 172` |
+| 5 | `x-phanthy-project` | `project` | Project id of the session, when one exists | `M6-cli-config.txt:191` |
+| 6 | `x-phanthy-request` | `request` | Per-request correlation id (UUID; regenerated per message request) | `M6-cli-config.txt:152, 191` |
+| 7 | `x-phanthy-session` | `session` | Session id | `M6-cli-config.txt:191` |
+
+Related but separate: the telemetry flush additionally sends a non-namespaced `x-service-name: phanthy-codeo`
+(`M6-cli-config.txt:136`). On the two discovery endpoints (EP-16/EP-17) only `x-phanthy-product` is sent, not
+the full family (`M6-cli-config.txt:172, 180`). None of these headers was ever observed on a live response, and
+none is required by any observed endpoint — they are documented as the official client's request metadata,
+`VERIFIED-STATIC`.
+
+### 5.7 Privacy observation — `x-phanthy-cli-device`
+
+`x-phanthy-cli-device` carries a base64url-encoded JSON object built from the local host: hostname, username,
+platform, architecture, OS release, up to 32 IPv4 address candidates, network interfaces and default routes
+(`M6-cli-config.txt:195-201`). This is a host-fingerprint / telemetry design choice of the official client, not
+an access-control mechanism and not a vulnerability. It is recorded as a **privacy observation**: anyone who
+operates the official CLI transmits host identity and network topology metadata on each message request. Nothing
+about it was exercised or replayed; no value is reproduced in this catalog.
 
 ---
 
@@ -540,7 +692,7 @@ credential**. That is `PRIOR-ART` only; the live server may reject Bearer on `/v
 | R4 | `/api/web/events` semantics — content type, auth, body, streaming | Cannot be specified; four competing hypotheses in §3.11 | INFERRED-only | `M1-index.md:207-209` |
 | R5 | `/api/oauth/claude_cli/roles` and `/api/oauth/profile` success schemas | Two "verified existence, unknown body" endpoints | `BLOCKED-CRED` | `M1-anon-probe-matrix.txt:66, 69` |
 | R6 | Real API-key minting path (both known paths 404) | Credential docs must describe the fallback, not a minting flow | `BLOCKED-CRED` | `M1-index.md:218-221` |
-| R7 | Model identifiers unavailable over HTTP (`/v1/models` 404) and absent from bundles | Model table can only be `PRIOR-ART / unverified live` | PRIOR-ART | `M1-index.md:213-214`; `M1-js-static-analysis.txt:97-123` |
+| R7 | Model identifiers unavailable over HTTP (`/v1/models` 404). M6 adds a guarded catalogue path (`/api/phanthy_code/models`, EP-16) whose body is `BLOCKED-CRED`, and a 13-alias public page (`PUBLIC-MARKETING`). No wire model ID is confirmed. | Model table stays a two-layer presentation: public display aliases vs stale prior-art IDs, mapping unknown | PRIOR-ART + `BLOCKED-CRED` | `M1-index.md:213-214`; `M1-js-static-analysis.txt:97-123`; `M6-public-model-catalog.txt:91-99`; `M6-index.md` §4 (evidence grade table) |
 | R8 | Full `platform` vocabulary of EP-12 (only `linux` proven, `darwin` rejected) | Download docs must not advertise macOS/Windows | VERIFIED (negatives) / INFERRED (positives) | `M1-anon-probe-matrix.txt:337-367` |
 | R9 | `/api/public-assets` target never followed | Asset API cannot be documented | unprobed | `acceptance/M1.md:47` |
 | R10 | Token TTL, JWT claims, key rotation (`kid=configured-key`) | Auth docs remain behavioural, not cryptographic | `BLOCKED-CRED` | `M1-jwks.json:22` |
@@ -548,7 +700,38 @@ credential**. That is `PRIOR-ART` only; the live server may reject Bearer on `/v
 | R12 | Rate-limit / quota failure shapes unknown (no `RateLimit-*` header ever observed; only three error codes seen) | Cooldown policy in §5 of `02-usage-semantics.md` is policy, not observation | INFERRED | `M1-index.md:210-212` |
 | R13 | `OPTIONS /` returns 400 while `GET /` returns 200; 405s on API routes omit `Allow` | Method discovery must use OPTIONS on API paths, never 405 headers | VERIFIED | `M1-options-matrix.txt:7-10, 14`; `M1-anon-probe-matrix.txt:447-448` |
 | R14 | 404 is an HTML shell, not JSON | Clients must not parse 404 bodies; OpenAPI must omit a JSON 404 schema | VERIFIED | `M1-index.md:137-143` |
+| R15 | Success bodies of `GET /api/phanthy_code/models` (EP-16) and `/models/stats` (EP-17) — model list shape, stats fields, whether credit ratios appear | The two newest endpoints exist but cannot be described beyond their 401 | `BLOCKED-CRED` | `M6-new-endpoint-probes.txt:212-216`; `M6-index.md` §7 |
+| R16 | Live existence and auth of `POST /api/event_logging/batch` | A telemetry ingress path is asserted by the official client but was never probed | `VERIFIED-STATIC` only / unprobed | `M6-cli-config.txt:129-136` |
+| R17 | Effective message path is `/v1/messages` or `/v1/v1/messages` (SDK `baseURL` vs absolute path) | Cannot be settled without a POST | `UNVERIFIED` | `M6-cli-config.txt:145-157` |
+| R18 | Whether the AS accepts the client-requested `org:create_api_key` | The CLI asks for a scope the discovery document does not advertise | `UNVERIFIED` (needs interactive login) | `M6-cli-config.txt:75-86`; `M6-index.md` §3.4 |
 
-**`BLOCKED-CRED` summary (requires the user's own token, no fabrication):** R1, R2, R5, R6, R10, plus every
-success response of EP-03, EP-04, EP-08, EP-09, EP-10, EP-11. The verification plan that closes them is in
-`02-usage-semantics.md` §7.
+**`BLOCKED-CRED` summary (requires the user's own token, no fabrication):** R1, R2, R5, R6, R10, R15, plus every
+success response of EP-03, EP-04, EP-08, EP-09, EP-10, EP-11, EP-16, EP-17. The verification plan that closes
+them is in `02-usage-semantics.md` §7.
+
+---
+
+## 7. Static-only / unverified surface (M6)
+
+Everything in this section comes from **static strings inside the official npm package**
+`@phanthy/phanthy-codeo@0.2.11`, which was downloaded, extracted with `tar` and byte-sliced, but **never
+imported, installed or executed** (`M6-npm-package.json:83-93`). None of it is live-verified, and none of it was
+probed in M6 beyond the two model endpoints already catalogued. It is reproduced here only so the surface is not
+silently omitted.
+
+> **Grade for the whole of §7: `VERIFIED-STATIC` for "the string exists in the client"; `UNVERIFIED` for "the
+> path exists or behaves as described on the server". Do not probe these aggressively and do not treat them as
+> endpoints of this API.**
+
+| item | static fact | grade | anchor |
+|---|---|---|---|
+| `POST /api/event_logging/batch` | Built as `${base}/api/event_logging/batch`; JSON body `{events:[…]}` with a batch cap; headers `Content-Type: application/json`, `Authorization: Bearer <token>`, `User-Agent: phanthy-codeo/<version>`, `x-service-name: phanthy-codeo`, `x-phanthy-product: phanthy_codeo`, `X-Phanthy-Client-Source: phanthy-codeo`. Emitted by a `PhanthyTelemetry.flush` routine. **Not probed**; not counted in the 17. | `VERIFIED-STATIC` / live `UNVERIFIED` | `M6-cli-config.txt:129-136`; `M6-index.md` §3.7, §5 |
+| `https://dev.code.phanthy.com` | Build/runtime-flag-selected alternate host in `dist/cli.js`; the same expression chooses `https://code.phanthy.com`, so the dev host is only reachable on a dev build. **Not requested.** | `VERIFIED-STATIC` / unreachable in normal builds | `M6-cli-config.txt:159-166` |
+| `https://code.phanthy.com/console` | Web console URL used in login helper text; a page, not an API path. | `VERIFIED-STATIC` | `M6-cli-config.txt:160` |
+| `https://code.phanthy.com` (as web-search base) | Base URL of the client's `PhanthyWebSearchConfig`; the token resolver fails closed. The concrete search path was **not** extracted. | `VERIFIED-STATIC` (base only) / path `UNKNOWN` | `M6-cli-config.txt:138-143` |
+| `HTTP-Referer` / `X-Title` = `https://code.phanthy.com/` | Injected into **third-party** provider autoloads (llmgateway, openrouter, nvidia, vercel, zenmux, gitlab, kilo, snowflake-cortex). Client-side branding on other vendors' APIs, **not** a Phanthy endpoint. | `VERIFIED-STATIC` | `M6-cli-config.txt:163-166` |
+
+Operational guidance: these items are documented for completeness of the supply-chain picture. A live probe of
+`/api/event_logging/batch` would be a `POST` against a telemetry ingress and is therefore outside the
+read-only governance envelope (`00-governance.md:11-20`); it stays `UNVERIFIED` unless the user explicitly
+authorises it.

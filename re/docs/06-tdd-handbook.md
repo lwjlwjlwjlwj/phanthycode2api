@@ -642,7 +642,7 @@ Known contract tests this project must keep green (from the M2 acceptance gate, 
 
 | contract property | why | anchor |
 |---|---|---|
-| Exactly 15 operations, one per `EP-01…EP-15`, `operationId` unique | M2 verified 15/15 unique | `acceptance/M2.md:61-62` |
+| Exactly 17 operations, one per `EP-01…EP-17`, `operationId` unique | M2 verified 15/15; M6 added `phanthyModelsGet` + `modelStatsGet`; M6b validated 17/17 unique | `acceptance/M2.md:61-62`, `evidence/M6-index.md` |
 | `messagesCreate` declares **two alternative** security schemes (`apiKeyAuth` + `bearerAuth`) and two response media types | scheme is `BLOCKED-CRED`; a single required scheme would assert unobserved behaviour | `acceptance/M2.md:138` |
 | No success schema on `profileGet` / `claudeCliRolesGet` | bodies never observed | `acceptance/M2.md:154` |
 | `webEventsCreate` is a placeholder with no request/response schema | semantics INFERRED-only | `acceptance/M2.md:144-145` |

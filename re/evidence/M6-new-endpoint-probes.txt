@@ -1,0 +1,224 @@
+M6-new-endpoint-probes.txt — anonymous, read-only probes of the two new Phanthy model endpoints
+====================================================================================================
+
+Capture window : 2026-10-26T00:20:25Z .. 2026-10-26T00:20:33Z  (2026-10-26T08:20:25+08:00 .. 08:20:33+08:00)
+Target origin  : https://code.phanthy.com
+Identity       : ANONYMOUS — no Authorization header, no Cookie, no x-api-key, no token, no login
+Methods used   : OPTIONS, GET, HEAD only   (no POST, no write, no body sent)
+Requests used  : 6 in this file (9 anonymous requests total in M6 against a hard cap of 10)
+Rate discipline: >=1.1 s between requests (sleep 1.1 in the loop); observed server dates agree
+Egress         : HTTP_PROXY=HTTPS_PROXY=http://127.0.0.1:18080 (sandbox egress); HTTP/2 to origin
+Tools          : curl, python3, sha256sum (no browser, no JS execution)
+
+Response-dump convention (IMPORTANT): the leading
+  HTTP/1.1 200 OK / date: ...
+block at the top of each dump is the proxy CONNECT tunnel handshake, NOT the origin response.
+The origin response is the HTTP/2 status block that follows it.
+
+Header set observed on both endpoints (identical on all 6 responses):
+  strict-transport-security: max-age=31536000; includeSubDomains
+  vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+  via: kong/2.5.1 ; server: TencentEdgeOne ; x-kong-upstream-latency ; x-kong-proxy-latency ; eo-log-uuid ; eo-cache-status
+  (no access-control-* headers; no rate-limit headers; no cache-control on the 401)
+
+====================================================================================================
+ENDPOINT 1 — /api/phanthy_code/models
+====================================================================================================
+
+--- [1a] OPTIONS  (start 2026-10-26T00:20:25Z) ------------------------------------------------
+Command:
+  curl -sS --http2 --max-time 30 -X OPTIONS \
+       -D resp_models_OPTIONS.hdr -o resp_models_OPTIONS.body \
+       -w 'CURL_STATS status=%{http_code} type=%{content_type} size=%{size_download} time=%{time_total}\n' \
+       https://code.phanthy.com/api/phanthy_code/models
+
+Raw response:
+HTTP/1.1 200 OK
+date: Mon, 26 Oct 2026 00:20:25 GMT
+
+HTTP/2 204 
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+allow: GET, HEAD, OPTIONS
+x-kong-upstream-latency: 4
+x-kong-proxy-latency: 1
+via: kong/2.5.1
+server: TencentEdgeOne
+date: Mon, 26 Oct 2026 00:20:26 GMT
+eo-log-uuid: 15809721554408782894
+eo-cache-status: MISS
+
+Observed: status 204, body 0 bytes, allow: GET, HEAD, OPTIONS
+
+--- [1b] GET  (start 2026-10-26T00:20:28Z) -----------------------------------------------------
+Command:
+  curl -sS --http2 --max-time 30 -X GET \
+       -D resp_models_GET.hdr -o resp_models_GET.body \
+       -w 'CURL_STATS status=%{http_code} type=%{content_type} size=%{size_download} time=%{time_total}\n' \
+       https://code.phanthy.com/api/phanthy_code/models
+
+CURL_STATS status=401 type=application/json size=79 time=0.099150
+Raw response headers:
+HTTP/1.1 200 OK
+date: Mon, 26 Oct 2026 00:20:28 GMT
+
+HTTP/2 401 
+content-type: application/json
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+www-authenticate: Bearer realm="phanthy-code", error="invalid_request", error_description="Bearer access token is required."
+x-kong-upstream-latency: 6
+x-kong-proxy-latency: 0
+via: kong/2.5.1
+server: TencentEdgeOne
+date: Mon, 26 Oct 2026 00:20:28 GMT
+eo-log-uuid: 7330472956357416862
+eo-cache-status: MISS
+
+Raw body (79 bytes, byte-exact, no trailing newline; shown with a 2-space indent):
+  {"error":{"code":"missing_login","message":"Bearer access token is required."}}
+
+Fields: status=401 | content-type=application/json | content-length=ABSENT (chunked) | body=79 bytes
+        www-authenticate: Bearer realm="phanthy-code", error="invalid_request",
+                          error_description="Bearer access token is required."
+
+--- [1c] HEAD  (start 2026-10-26T00:20:29Z) ----------------------------------------------------
+Command:
+  curl -sS --http2 --max-time 30 -I https://code.phanthy.com/api/phanthy_code/models
+
+Raw response:
+HTTP/1.1 200 OK
+date: Mon, 26 Oct 2026 00:20:29 GMT
+
+HTTP/2 401 
+content-type: application/json
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+www-authenticate: Bearer realm="phanthy-code", error="invalid_request", error_description="Bearer access token is required."
+x-kong-upstream-latency: 4
+x-kong-proxy-latency: 0
+via: kong/2.5.1
+server: TencentEdgeOne
+date: Mon, 26 Oct 2026 00:20:29 GMT
+eo-log-uuid: 13362997875033994556
+eo-cache-status: MISS
+
+Observed: status 401, content-type application/json, no body (HEAD), same WWW-Authenticate guard.
+
+CLASSIFICATION: verified exists, auth required
+  existence ........ VERIFIED-LIVE (OPTIONS 204 with allow: GET, HEAD, OPTIONS)
+  auth gate ........ VERIFIED-LIVE (GET/HEAD 401 + WWW-Authenticate Bearer)
+  success payload .. UNVERIFIED (never observed; no credential available and none was attempted)
+
+====================================================================================================
+ENDPOINT 2 — /api/phanthy_code/models/stats
+====================================================================================================
+
+--- [2a] OPTIONS  (start 2026-10-26T00:20:30Z) -------------------------------------------------
+Command:
+  curl -sS --http2 --max-time 30 -X OPTIONS \
+       -D resp_models_stats_OPTIONS.hdr -o resp_models_stats_OPTIONS.body \
+       -w 'CURL_STATS status=%{http_code} type=%{content_type} size=%{size_download} time=%{time_total}\n' \
+       https://code.phanthy.com/api/phanthy_code/models/stats
+
+Raw response:
+HTTP/1.1 200 OK
+date: Mon, 26 Oct 2026 00:20:30 GMT
+
+HTTP/2 204 
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+allow: GET, HEAD, OPTIONS
+x-kong-upstream-latency: 4
+x-kong-proxy-latency: 0
+via: kong/2.5.1
+server: TencentEdgeOne
+date: Mon, 26 Oct 2026 00:20:30 GMT
+eo-log-uuid: 12435995760262760842
+eo-cache-status: MISS
+
+Observed: status 204, body 0 bytes, allow: GET, HEAD, OPTIONS
+
+--- [2b] GET  (start 2026-10-26T00:20:31Z) -----------------------------------------------------
+Command:
+  curl -sS --http2 --max-time 30 -X GET \
+       -D resp_models_stats_GET.hdr -o resp_models_stats_GET.body \
+       -w 'CURL_STATS status=%{http_code} type=%{content_type} size=%{size_download} time=%{time_total}\n' \
+       https://code.phanthy.com/api/phanthy_code/models/stats
+
+CURL_STATS status=401 type=application/json size=79 time=0.068696
+Raw response headers:
+HTTP/1.1 200 OK
+date: Mon, 26 Oct 2026 00:20:31 GMT
+
+HTTP/2 401 
+content-type: application/json
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+www-authenticate: Bearer realm="phanthy-code", error="invalid_request", error_description="Bearer access token is required."
+x-kong-upstream-latency: 7
+x-kong-proxy-latency: 0
+via: kong/2.5.1
+server: TencentEdgeOne
+date: Mon, 26 Oct 2026 00:20:31 GMT
+eo-log-uuid: 9293859239818197507
+eo-cache-status: MISS
+
+Raw body (79 bytes, byte-identical to endpoint 1; shown with a 2-space indent):
+  {"error":{"code":"missing_login","message":"Bearer access token is required."}}
+
+Fields: status=401 | content-type=application/json | content-length=ABSENT (chunked) | body=79 bytes
+
+--- [2c] HEAD  (start 2026-10-26T00:20:33Z) ----------------------------------------------------
+Command:
+  curl -sS --http2 --max-time 30 -I https://code.phanthy.com/api/phanthy_code/models/stats
+
+Raw response:
+HTTP/1.1 200 OK
+date: Mon, 26 Oct 2026 00:20:33 GMT
+
+HTTP/2 401 
+content-type: application/json
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+www-authenticate: Bearer realm="phanthy-code", error="invalid_request", error_description="Bearer access token is required."
+x-kong-upstream-latency: 4
+x-kong-proxy-latency: 0
+via: kong/2.5.1
+server: TencentEdgeOne
+date: Mon, 26 Oct 2026 00:20:33 GMT
+eo-log-uuid: 309811289702967625
+eo-cache-status: MISS
+
+Observed: status 401, content-type application/json, no body (HEAD), same guard.
+
+CLASSIFICATION: verified exists, auth required
+  existence ........ VERIFIED-LIVE (OPTIONS 204 with allow: GET, HEAD, OPTIONS)
+  auth gate ........ VERIFIED-LIVE (GET/HEAD 401 + WWW-Authenticate Bearer)
+  success payload .. UNVERIFIED
+
+====================================================================================================
+SUMMARY
+====================================================================================================
+
+| endpoint                            | OPTIONS | allow                | GET | content-type     | body | HEAD |
+|-------------------------------------|---------|----------------------|-----|------------------|------|------|
+| /api/phanthy_code/models            | 204     | GET, HEAD, OPTIONS   | 401 | application/json | 79 B | 401  |
+| /api/phanthy_code/models/stats      | 204     | GET, HEAD, OPTIONS   | 401 | application/json | 79 B | 401  |
+
+Both 401 bodies are byte-identical and use the M1 error envelope:
+  {"error":{"code":"missing_login","message":"Bearer access token is required."}}
+
+What this does NOT establish:
+  - the success response schema (model list shape, stats fields, credit-ratio fields) — never seen;
+  - whether the `code` value changes for an expired/invalid token (only missing-credential seen);
+  - POST/PUT behaviour (methods restricted to GET/HEAD/OPTIONS per Allow; POST not attempted);
+  - any linkage between the stats endpoint and the published token-plan ratios (see M6-public-model-catalog.txt).
+
+Delta vs M1: both paths were absent from the M1 19-path matrix (M1 tested `/v1/models`, not `/api/phanthy_code/*`).
+Their existence is predicted by the official CLI bundle (M6-cli-config.txt §2(vi)) and now confirmed live.
+
+Provenance: raw dumps retained at /tmp/m6/resp_models_*{OPTIONS,GET,HEAD}.* during the run; bodies reproduced
+byte-exactly above except for a leading 2-space indent added for readability (the body string itself is
+byte-exact: 79 bytes, sha256 abeec43bb27c7cbb7c6cd3fa3bbdee2bb9f953de4f6d18d648a416d92116ebe7).
+Second endpoint body sha256: abeec43bb27c7cbb7c6cd3fa3bbdee2bb9f953de4f6d18d648a416d92116ebe7 (identical).

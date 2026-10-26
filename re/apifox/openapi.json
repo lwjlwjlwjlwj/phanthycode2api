@@ -4,7 +4,7 @@
     "title": "PhanthyCode AI API (reverse-engineered)",
     "version": "1.0.0",
     "summary": "Anonymous-surface, evidence-graded OpenAPI model of https://code.phanthy.com",
-    "description": "Reverse-engineered description of the PhanthyCode AI surface at https://code.phanthy.com, derived from the M1 anonymous capture window 2026-10-26T05:58:24+08:00 → 2026-10-26T06:14:37+08:00 (evidence/M1-index.md:15) plus the in-repo prior art. No authenticated request, no login, no token exchange and no credential use was performed while producing this document.\n\nEVIDENCE GRADES USED THROUGHOUT\n- VERIFIED: directly observed on the live target during the M1 anonymous capture; anchored to a file:line in /workspace/re/evidence/.\n- PRIOR-ART: derived only from the in-repo Go implementation / README (e.g. cmd/login/main.go, internal/upstream/client.go). Describes what this repository does, NOT what the target does.\n- INFERRED: reasoned from protocol metadata or convention, basis stated inline. Must be re-tested.\n- BLOCKED-CRED: requires the user's own token; nothing was fabricated.\n\nAUTHENTICATED BEHAVIOUR IS PRIOR-ART / BLOCKED-CRED. In particular the request wire contract of POST /v1/messages and the concrete success bodies of POST /oauth/token, POST /oauth/revoke, GET /api/oauth/profile and GET /api/oauth/claude_cli/roles have never been observed. Where a schema is marked prior-art it is a model of the repository's client, not a live capture. The model roster is 'PRIOR-ART / unverified live': GET /v1/models returns the HTML 404 shell (evidence/M1-anon-probe-matrix.txt:73).\n\nVERIFIED ABSENT (must not be treated as operations): GET /v1/models, POST /v1/messages/count_tokens, GET /api/health, GET /healthz, POST /api/oauth/phanthy_cli/create_api_key, POST /api/oauth/claude_cli/create_api_key. All six return a 404 Next.js HTML shell (26,573–26,614 B) rather than a JSON error (evidence/M1-anon-probe-matrix.txt:67-68, 72-73, 78-79; docs/01-endpoint-catalog.md:443-462).\n\nDOCUMENTED TARGET-SIDE ERROR ENVELOPE: only three codes have ever been observed, all sharing {\"error\":{\"code\",\"message\"}}: unsupported_response_type (evidence/M1-anon-probe-matrix.txt:112), missing_login (:163, :190), invalid_platform (:245, :365). There is no JSON 404 taxonomy: unknown API paths return the HTML app shell, so this document intentionally models no JSON 404 body.\n\nGOVERNANCE: the capture and this model follow docs/00-governance.md (read-only reverse engineering, no auth bypass, no brute force, no DoS, no L2 secret persistence). No secret appears here; only <api_key>, <token>, <access_token>, <authorization_code>, <pkce_code_verifier> placeholders are used.",
+    "description": "Reverse-engineered description of the PhanthyCode AI surface at https://code.phanthy.com, derived from the M1 anonymous capture window 2026-10-26T05:58:24+08:00 → 2026-10-26T06:14:37+08:00 (evidence/M1-index.md:15) plus the in-repo prior art. No authenticated request, no login, no token exchange and no credential use was performed while producing this document.\n\nEVIDENCE GRADES USED THROUGHOUT\n- VERIFIED: directly observed on the live target during the M1 anonymous capture; anchored to a file:line in /workspace/re/evidence/.\n- PRIOR-ART: derived only from the in-repo Go implementation / README (e.g. cmd/login/main.go, internal/upstream/client.go). Describes what this repository does, NOT what the target does.\n- INFERRED: reasoned from protocol metadata or convention, basis stated inline. Must be re-tested.\n- BLOCKED-CRED: requires the user's own token; nothing was fabricated.\n\nAUTHENTICATED BEHAVIOUR IS PRIOR-ART / BLOCKED-CRED. In particular the request wire contract of POST /v1/messages and the concrete success bodies of POST /oauth/token, POST /oauth/revoke, GET /api/oauth/profile and GET /api/oauth/claude_cli/roles have never been observed. Where a schema is marked prior-art it is a model of the repository's client, not a live capture. The model roster has TWO layers that are not joined - a PUBLIC-MARKETING display-alias layer and a PRIOR-ART alias->upstream layer (see the M6 ADDENDUM at the end). The PRIOR-ART layer is unverified live: GET /v1/models returns the HTML 404 shell (evidence/M1-anon-probe-matrix.txt:73).\n\nVERIFIED ABSENT (must not be treated as operations): GET /v1/models, POST /v1/messages/count_tokens, GET /api/health, GET /healthz, POST /api/oauth/phanthy_cli/create_api_key, POST /api/oauth/claude_cli/create_api_key. All six return a 404 Next.js HTML shell (26,573–26,614 B) rather than a JSON error (evidence/M1-anon-probe-matrix.txt:67-68, 72-73, 78-79; docs/01-endpoint-catalog.md:443-462).\n\nDOCUMENTED TARGET-SIDE ERROR ENVELOPE: only three codes have ever been observed, all sharing {\"error\":{\"code\",\"message\"}}: unsupported_response_type (evidence/M1-anon-probe-matrix.txt:112), missing_login (:163, :190), invalid_platform (:245, :365). There is no JSON 404 taxonomy: unknown API paths return the HTML app shell, so this document intentionally models no JSON 404 body.\n\nGOVERNANCE: the capture and this model follow docs/00-governance.md (read-only reverse engineering, no auth bypass, no brute force, no DoS, no L2 secret persistence). No secret appears here; only <api_key>, <token>, <access_token>, <authorization_code>, <pkce_code_verifier> placeholders are used.\n\nM6 ADDENDUM (2026-10-26) — 17 ENDPOINTS. Two model-discovery operations were added after (a) anonymous live probes and (b) static analysis of the official npm CLI @phanthy/phanthy-codeo@0.2.11 (tarball sha256 3134d33d4eba31ec0af543a8afa061d3b21c4df7259d49decc11928e2244d80c, extracted with tar -xzf and never installed, imported or executed; evidence/M6-npm-package.json, evidence/M6-cli-config.txt). GET /api/phanthy_code/models and GET /api/phanthy_code/models/stats answer OPTIONS 204 with `allow: GET, HEAD, OPTIONS`, and anonymous GET/HEAD 401 application/json (79 B) {\"error\":{\"code\":\"missing_login\",\"message\":\"Bearer access token is required.\"}} with WWW-Authenticate: Bearer realm=\"phanthy-code\" (evidence/M6-new-endpoint-probes.txt). Their success bodies remain BLOCKED-CRED: no schema and no example are asserted. The CLI declares the same two paths alongside /oauth/authorize, /oauth/token, /api/oauth/profile and /v1/messages, and on /v1/messages it DELETES x-api-key and sends Authorization: Bearer <access_token> only; apiKeyAuth is therefore retained solely as an unverified prior-art alternative. Both model operations use bearerAuth.\n\nMODEL ROSTER — TWO LAYERS, NOT JOINED. PUBLIC-MARKETING layer: 13 display aliases with credit multipliers on https://code.phanthy.com/token-plan (evidence/M6-public-model-catalog.txt). PRIOR-ART layer: the Iris/Zeus/Gaia/Apollo/Metis mapping in README.md / internal/upstream/payload.go. No alias-to-upstream-ID mapping has been established; never merge the two lists. Neither layer is a live API catalogue.",
     "contact": {
       "name": "Reverse-engineering programme (M4 deliverables)"
     },
@@ -15,7 +15,10 @@
       "VERIFIED": "Directly observed during the M1 anonymous capture (evidence/* file:line).",
       "PRIOR-ART": "Derived from the in-repo Go implementation / README only.",
       "INFERRED": "Reasoned from metadata or convention; basis stated inline.",
-      "BLOCKED-CRED": "Requires the user's own token; never exercised, nothing fabricated."
+      "BLOCKED-CRED": "Requires the user's own token; never exercised, nothing fabricated.",
+      "VERIFIED-LIVE": "Directly observed during the M6 anonymous capture window 2026-10-26T00:20:25Z → 00:20:33Z (evidence/M6-new-endpoint-probes.txt).",
+      "VERIFIED-STATIC": "Exact string present in the official npm CLI bundle, extracted with tar -xzf and byte slicing; the package was never installed, imported or executed (evidence/M6-cli-config.txt).",
+      "PUBLIC-MARKETING": "Public marketing/pricing page (https://code.phanthy.com/token-plan). Not an API contract: no schema, no field names, no wire model IDs."
     },
     "x-verified-absent-paths": [
       "/v1/models",
@@ -617,8 +620,8 @@
           "Inference"
         ],
         "summary": "Anthropic Messages API inference (JSON or SSE stream)",
-        "description": "EXISTENCE VERIFIED, WIRE CONTRACT PRIOR-ART: OPTIONS advertises `Allow: OPTIONS, POST`; GET and HEAD return 405 with 0 bytes and no Allow header (evidence/M1-options-matrix.txt:23; M1-anon-probe-matrix.txt:70-71). The POST has never been issued on the live target (BLOCKED-CRED).\n\nTWO ALTERNATIVE CREDENTIAL SCHEMES (neither observed live): `x-api-key: <api_key>` is preferred by the prior art when a key exists, otherwise `Authorization: Bearer <access_token>` is used (internal/upstream/client.go:344-350; cmd/login/main.go:97-104). Both are modelled as security alternatives. Additional prior-art headers: `x-app: cli`, `User-Agent: phanthycode2api/1.0`, `Accept: application/json, text/event-stream` (client.go:341-343). No `anthropic-version` header is sent anywhere in the repository, so its absence is presumed tolerated (INFERRED).\n\nREQUEST SCHEMA — PRIOR-ART from internal/upstream/payload.go:47-60: model, max_tokens (always serialized; clamped 1..65536 to 8192 by the proxy at payload.go:117-119), messages[], optional system, temperature, top_p, stream, tools, tool_choice, stop_sequences, metadata. The proxy forces `stream: true` (payload.go:109), so a non-streaming JSON response has never been produced by the prior art.\n\nRESPONSE — NEVER OBSERVED. Two media types are modelled: non-streaming `application/json` (loose, inferred from the message_start payload at internal/upstream/sse.go:18-25) and `text/event-stream`. For SSE, the prior art reads only `data:` lines and treats the JSON `type` field as authoritative, ignoring `event:` names; it handles message_start, content_block_start, content_block_delta (text_delta / thinking_delta / input_json_delta), message_delta and message_stop, and has no `error` branch, so a mid-stream error event is silently dropped (internal/upstream/sse.go:188-276; docs/02-usage-semantics.md:165-227). Named examples below are illustrative frame shapes derived from that prior art and its test fixture, not live captures.\n\nERROR TAXONOMY: 402/429/5xx classification belongs to the proxy, not the target; no 402, 429 or RateLimit-* header has ever been observed (docs/02-usage-semantics.md:283-290). Only 400/401 error envelopes are modelled, and only as documented shape, not as observations on this path.",
-        "x-evidence-grade": "VERIFIED (existence); PRIOR-ART (wire contract); BLOCKED-CRED (auth scheme + live response)",
+        "description": "EXISTENCE VERIFIED, WIRE CONTRACT PRIOR-ART: OPTIONS advertises `Allow: OPTIONS, POST`; GET and HEAD return 405 with 0 bytes and no Allow header (evidence/M1-options-matrix.txt:23; M1-anon-probe-matrix.txt:70-71). The POST has never been issued on the live target (BLOCKED-CRED).\n\nTWO ALTERNATIVE CREDENTIAL SCHEMES (neither observed live): `x-api-key: <api_key>` is preferred by the prior art when a key exists, otherwise `Authorization: Bearer <access_token>` is used (internal/upstream/client.go:344-350; cmd/login/main.go:97-104). Both are modelled as security alternatives. Additional prior-art headers: `x-app: cli`, `User-Agent: phanthycode2api/1.0`, `Accept: application/json, text/event-stream` (client.go:341-343). No `anthropic-version` header is sent anywhere in the repository, so its absence is presumed tolerated (INFERRED).\n\nM6 CORRECTION (VERIFIED-STATIC): the OFFICIAL CLI deletes `x-api-key` and sends `Authorization: Bearer <access_token>` only, plus its seven x-phanthy-*/X-Phanthy-* headers, a User-Agent and a fresh x-phanthy-request UUID (evidence/M6-cli-config.txt:145-157). Treat bearerAuth as the primary scheme and apiKeyAuth as an unverified prior-art possibility, never as 'preferred'. Which scheme the target actually accepts on /v1/* remains BLOCKED-CRED.\n\nREQUEST SCHEMA — PRIOR-ART from internal/upstream/payload.go:47-60: model, max_tokens (always serialized; clamped 1..65536 to 8192 by the proxy at payload.go:117-119), messages[], optional system, temperature, top_p, stream, tools, tool_choice, stop_sequences, metadata. The proxy forces `stream: true` (payload.go:109), so a non-streaming JSON response has never been produced by the prior art.\n\nRESPONSE — NEVER OBSERVED. Two media types are modelled: non-streaming `application/json` (loose, inferred from the message_start payload at internal/upstream/sse.go:18-25) and `text/event-stream`. For SSE, the prior art reads only `data:` lines and treats the JSON `type` field as authoritative, ignoring `event:` names; it handles message_start, content_block_start, content_block_delta (text_delta / thinking_delta / input_json_delta), message_delta and message_stop, and has no `error` branch, so a mid-stream error event is silently dropped (internal/upstream/sse.go:188-276; docs/02-usage-semantics.md:165-227). Named examples below are illustrative frame shapes derived from that prior art and its test fixture, not live captures.\n\nERROR TAXONOMY: 402/429/5xx classification belongs to the proxy, not the target; no 402, 429 or RateLimit-* header has ever been observed (docs/02-usage-semantics.md:283-290). Only 400/401 error envelopes are modelled, and only as documented shape, not as observations on this path.",
+        "x-evidence-grade": "VERIFIED (existence); PRIOR-ART (wire contract); VERIFIED-STATIC (official CLI sends Bearer, not x-api-key); BLOCKED-CRED (live auth scheme + response)",
         "security": [
           {
             "apiKeyAuth": []
@@ -637,6 +640,27 @@
               "type": "string",
               "example": "cli"
             }
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyClient"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyClientSource"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyCliDevice"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyProduct"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyProject"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyRequest"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthySession"
           }
         ],
         "requestBody": {
@@ -947,20 +971,246 @@
           }
         }
       }
+    },
+    "/api/phanthy_code/models": {
+      "get": {
+        "operationId": "phanthyModelsGet",
+        "tags": [
+          "Inference"
+        ],
+        "summary": "Model catalogue used by the official CLI's model picker",
+        "description": "EXISTENCE AND METHOD SURFACE VERIFIED-LIVE (M6): OPTIONS returns 204 with `allow: GET, HEAD, OPTIONS`; anonymous GET returns 401 application/json in 79 bytes. This is one of the two routes the official CLI declares as `models` (`https://code.phanthy.com/api/phanthy_code/models`, evidence/M6-cli-config.txt:74-99) and it is the route the CLI calls to populate its model picker.\n\nGUARD: anonymous GET/HEAD return {\"error\":{\"code\":\"missing_login\",\"message\":\"Bearer access token is required.\"}} (79 B, sha256 abeec43bb27c7cbb7c6cd3fa3bbdee2bb9f953de4f6d18d648a416d92116ebe7) with `WWW-Authenticate: Bearer realm=\"phanthy-code\", error=\"invalid_request\", error_description=\"Bearer access token is required.\"`. The body is byte-identical to the sibling /models/stats path, which indicates one shared guard in front of the /api/phanthy_code/* prefix (evidence/M6-new-endpoint-probes.txt:60-110). There are no access-control-* or ratelimit-* headers and no content-length (chunked).\n\nSUCCESS SCHEMA IS BLOCKED-CRED. Nothing about the 200 body is known: the CLI call was never executed and no token was used, so no field name, shape or example is asserted here. What the public pricing page advertises (13 display aliases with credit multipliers) is PUBLIC-MARKETING metadata and is NOT evidence of this endpoint's wire format (evidence/M6-public-model-catalog.txt:91-105).\n\nCONSEQUENCE: GET /v1/models remains verified absent (HTML 404 shell), but model discovery is not absent from the site — it lives here, behind a bearer guard (docs/01-endpoint-catalog.md §3.16).",
+        "x-evidence-grade": "VERIFIED-LIVE (existence, method surface, bearer challenge); BLOCKED-CRED (success body)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XPhanthyClient"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyClientSource"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyCliDevice"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyProduct"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyProject"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyRequest"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthySession"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BLOCKED-CRED: success schema was never observed. The schema below is a permissive placeholder only — do not treat any field as known. Reproduce with an authorised GET once a token exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Permissive placeholder. Real shape unknown; no example is provided on purpose.",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "VERIFIED-LIVE: bearer token missing. 79 B JSON body, byte-identical to /api/phanthy_code/models/stats. HEAD returns the same status with no body.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "VERIFIED-LIVE challenge naming the Bearer scheme and the realm.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Bearer realm=\"phanthy-code\", error=\"invalid_request\", error_description=\"Bearer access token is required.\""
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_login",
+                    "message": "Bearer access token is required."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/phanthy_code/models/stats": {
+      "get": {
+        "operationId": "modelStatsGet",
+        "tags": [
+          "Inference"
+        ],
+        "summary": "Per-model statistics used by the official CLI (best-effort, 5 s timeout)",
+        "description": "EXISTENCE AND METHOD SURFACE VERIFIED-LIVE (M6): OPTIONS returns 204 with `allow: GET, HEAD, OPTIONS`; anonymous GET returns 401 application/json in 79 bytes. The official CLI declares this route as `modelStats` (`https://code.phanthy.com/api/phanthy_code/models/stats`, evidence/M6-cli-config.txt:74-99) and calls it with a 5 s AbortSignal, i.e. as a best-effort, non-blocking enrichment of the model picker.\n\nGUARD: identical to /api/phanthy_code/models — same 401 body (79 B, sha256 abeec43bb27c7cbb7c6cd3fa3bbdee2bb9f953de4f6d18d648a416d92116ebe7) and the same `WWW-Authenticate: Bearer realm=\"phanthy-code\"` challenge; HEAD returns 401 with no body (evidence/M6-new-endpoint-probes.txt:110-193).\n\nSEMANTICS ARE BLOCKED-CRED. \"Stats\" is INFERRED from the path name and the CLI call site only: a per-model aggregate (usage, quota or pricing metadata) is plausible but unproven. The success body was never observed, so no schema, field or example is asserted. Do not assume it is a rate-limit or quota API.",
+        "x-evidence-grade": "VERIFIED-LIVE (existence, method surface, bearer challenge); INFERRED (purpose); BLOCKED-CRED (success body)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XPhanthyClient"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyClientSource"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyCliDevice"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyProduct"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyProject"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthyRequest"
+          },
+          {
+            "$ref": "#/components/parameters/XPhanthySession"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BLOCKED-CRED: success schema was never observed. The schema below is a permissive placeholder only — do not treat any field as known.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Permissive placeholder. Real shape unknown; no example is provided on purpose.",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "VERIFIED-LIVE: bearer token missing. Byte-identical 79 B body to /api/phanthy_code/models.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "VERIFIED-LIVE challenge naming the Bearer scheme and the realm.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Bearer realm=\"phanthy-code\", error=\"invalid_request\", error_description=\"Bearer access token is required.\""
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_login",
+                    "message": "Bearer access token is required."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
+    "parameters": {
+      "XPhanthyClient": {
+        "name": "x-phanthy-client",
+        "in": "header",
+        "required": false,
+        "description": "VERIFIED-STATIC (official CLI): client discriminator. Lowercase `x-phanthy-` prefix. Optional on the wire; the server's requirement is unverified. Casing must be preserved verbatim (evidence/M6-cli-config.txt:58-73).",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XPhanthyClientSource": {
+        "name": "X-Phanthy-Client-Source",
+        "in": "header",
+        "required": false,
+        "description": "VERIFIED-STATIC: origin marker. The CLI sends `cli` on the message path and `phanthy-codeo` on telemetry. Note the capitalised `X-Phanthy-` prefix used by exactly two of the seven Phanthy headers (evidence/M6-cli-config.txt:58-73).",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "XPhanthyCliDevice": {
+        "name": "x-phanthy-cli-device",
+        "in": "header",
+        "required": false,
+        "description": "VERIFIED-STATIC: base64url(JSON) host fingerprint built by the CLI (hostname, username, platform, arch, OS release, up to 32 IPv4 candidates, interfaces, routes). PRIVACY OBSERVATION, non-exploitative: it is a client-side telemetry design choice, not an access-control mechanism. Never reproduce a real value; the placeholder is <device_fingerprint> (evidence/M6-cli-config.txt:195-201; docs/01-endpoint-catalog.md §5.7).",
+        "schema": {
+          "type": "string"
+        },
+        "example": "<device_fingerprint>"
+      },
+      "XPhanthyProduct": {
+        "name": "X-Phanthy-Product",
+        "in": "header",
+        "required": false,
+        "description": "VERIFIED-STATIC: product marker; `phanthy_code` on the two model-discovery calls, `phanthy_codeo` on telemetry (evidence/M6-cli-config.txt:58-73, 172-180). Capitalised `X-Phanthy-` prefix.",
+        "schema": {
+          "type": "string"
+        },
+        "example": "phanthy_code"
+      },
+      "XPhanthyProject": {
+        "name": "x-phanthy-project",
+        "in": "header",
+        "required": false,
+        "description": "VERIFIED-STATIC: project id of the session, when one is set. Placeholder only (evidence/M6-cli-config.txt:58-73).",
+        "schema": {
+          "type": "string"
+        },
+        "example": "<project_id>"
+      },
+      "XPhanthyRequest": {
+        "name": "x-phanthy-request",
+        "in": "header",
+        "required": false,
+        "description": "VERIFIED-STATIC: per-request correlation UUID, regenerated for every message request. Placeholder only (evidence/M6-cli-config.txt:58-73).",
+        "schema": {
+          "type": "string"
+        },
+        "example": "<request_uuid>"
+      },
+      "XPhanthySession": {
+        "name": "x-phanthy-session",
+        "in": "header",
+        "required": false,
+        "description": "VERIFIED-STATIC: session id. Placeholder only (evidence/M6-cli-config.txt:58-73).",
+        "schema": {
+          "type": "string"
+        },
+        "example": "<session_id>"
+      }
+    },
     "securitySchemes": {
       "apiKeyAuth": {
         "type": "apiKey",
         "in": "header",
         "name": "x-api-key",
-        "description": "PRIOR-ART alternative for POST /v1/messages: the CLI-facing API key, preferred by the proxy when one exists (internal/upstream/client.go:344-345). Whether an API key can still be minted is BLOCKED-CRED: both known create_api_key paths return the HTML 404 shell (evidence/M1-anon-probe-matrix.txt:67-68). Use the placeholder <api_key>."
+        "description": "PRIOR-ART alternative for POST /v1/messages: the CLI-facing API key, preferred by the proxy when one exists (internal/upstream/client.go:344-345). M6 CORRECTION: the OFFICIAL CLI explicitly DELETES this header and authenticates with Bearer only (evidence/M6-cli-config.txt:145-157), so this scheme is retained solely as an unverified possibility, not a preference. Whether an API key can still be minted is BLOCKED-CRED: both known create_api_key paths return the HTML 404 shell (evidence/M1-anon-probe-matrix.txt:67-68). Use the placeholder <api_key>."
       },
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Authorization: Bearer <access_token>. VERIFIED as the guard on /api/oauth/profile and /api/oauth/claude_cli/roles (evidence/M1-anon-probe-matrix.txt:66, 69, 154-163). PRIOR-ART as the fallback credential for POST /v1/messages when no API key exists (internal/upstream/client.go:346-350; cmd/login/main.go:97-104). Whether the target accepts Bearer on /v1/* is BLOCKED-CRED. Use the placeholder <access_token>."
+        "description": "Authorization: Bearer <access_token>. VERIFIED as the guard on /api/oauth/profile and /api/oauth/claude_cli/roles (evidence/M1-anon-probe-matrix.txt:66, 69, 154-163) and VERIFIED-LIVE as the guard on /api/phanthy_code/models and /api/phanthy_code/models/stats, whose 401 challenge is `WWW-Authenticate: Bearer realm=\"phanthy-code\"` (evidence/M6-new-endpoint-probes.txt:69, 158). VERIFIED-STATIC as the only scheme the official CLI sends on /v1/messages — it deletes x-api-key (evidence/M6-cli-config.txt:145-157). PRIOR-ART as the fallback credential for POST /v1/messages when no API key exists (internal/upstream/client.go:346-350; cmd/login/main.go:97-104). Whether the target accepts Bearer on /v1/* is BLOCKED-CRED. Use the placeholder <access_token>."
       }
     },
     "schemas": {
@@ -1198,7 +1448,7 @@
         "properties": {
           "model": {
             "type": "string",
-            "description": "Client-facing alias or upstream model ID. Unmapped names pass through unchanged (payload.go:91-97). The roster is PRIOR-ART / unverified live (docs/02-usage-semantics.md:335-357).",
+            "description": "Client-facing alias or upstream model ID. Unmapped names pass through unchanged (payload.go:91-97). Two roster layers exist and are NOT joined: a PUBLIC-MARKETING layer of 13 display aliases with credit multipliers (docs/02-usage-semantics.md §6.1, evidence/M6-public-model-catalog.txt) and a PRIOR-ART alias->upstream-ID layer (docs/02-usage-semantics.md §6.2). Neither is a live API catalogue; the alias-to-upstream mapping is unestablished (BLOCKED-CRED).",
             "examples": [
               "Iris-1.0",
               "DeepSeek-V4"

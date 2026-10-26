@@ -1,13 +1,18 @@
 # 02 · Usage Semantics — `https://code.phanthy.com/`
 
-Milestone: **M2 / T2.2–T2.4** · Author: reverse-engineering analyst (M2) · Language: English
-Companion document: `01-endpoint-catalog.md` (endpoint IDs `EP-01` … `EP-15` used throughout).
+Milestone: **M2 / T2.2–T2.4**, extended in **M6b** · Author: reverse-engineering analyst (M2), M6b
+documentation-integration engineer · Language: English
+Companion document: `01-endpoint-catalog.md` (endpoint IDs `EP-01` … `EP-17` used throughout).
 
 Grade vocabulary (identical to the catalog): `VERIFIED` = observed live in M1 with an evidence anchor;
 `PRIOR-ART` = derived from the in-repo Go implementation / README only; `INFERRED` = reasoned from metadata
 or convention, basis stated; `BLOCKED-CRED` = needs the user's own token, nothing fabricated.
-**M2 issued no network requests.** Every live statement is inherited from the M1 capture window
-`2026-10-26T05:58:24+08:00 → 06:14:37+08:00` (`M1-index.md:15`).
+M6 adds three finer grades used only for M6-derived statements: `VERIFIED-LIVE` (observed live in the M6
+anonymous window), `VERIFIED-STATIC` (exact string inside the official npm CLI bundle, never executed) and
+`PUBLIC-MARKETING` (public web page, not an API contract). See `01-endpoint-catalog.md` §1.4.
+**M2 issued no network requests**; **M6b issued no network requests**. Every live statement is inherited from the M1 capture window
+`2026-10-26T05:58:24+08:00 → 06:14:37+08:00` (`M1-index.md:15`) or the M6 window
+`2026-10-26T00:20:25Z → 00:20:33Z` (`M6-new-endpoint-probes.txt:4`).
 
 ---
 
@@ -52,8 +57,8 @@ or convention, basis stated; `BLOCKED-CRED` = needs the user's own token, nothin
 | `Content-Type: application/x-www-form-urlencoded` | `/oauth/token` | fixed | PRIOR-ART `cmd/login/main.go:191` |
 | `Accept: application/json` | `/oauth/token`, `create_api_key`, profile | fixed | PRIOR-ART `cmd/login/main.go:192`; `internal/upstream/client.go:184, 276` |
 | `anthropic-beta: oauth-2025-04-20` | `/oauth/token` (both grants), `create_api_key` | constant `oauth-2025-04-20` | PRIOR-ART `cmd/login/main.go:193`; `internal/upstream/client.go:139, 243, 274` |
-| `Authorization: Bearer <token>` | `/api/oauth/*`, `create_api_key`, fallback on `/v1/messages` | token | PRIOR-ART; guard VERIFIED on `/api/oauth/*` |
-| `x-api-key: <api_key>` | `/v1/messages` (preferred) | key | PRIOR-ART `internal/upstream/client.go:345` |
+| `Authorization: Bearer <token>` | `/api/oauth/*`, `create_api_key`, fallback on `/v1/messages`; the **only** scheme the official CLI sends on `/v1/messages` (§1.6) | token | PRIOR-ART; guard VERIFIED on `/api/oauth/*`; CLI intent VERIFIED-STATIC |
+| `x-api-key: <api_key>` | prior art only; **not used by the official CLI**, which deletes it | key | PRIOR-ART `internal/upstream/client.go:345` — unverified possibility (see §1.6) |
 | `x-app: cli` | `/v1/messages` | literal `cli` | PRIOR-ART `internal/upstream/client.go:342` |
 | `X-Claude-Code-Session-Id` | `/v1/messages` | local account UID | PRIOR-ART `internal/upstream/client.go:351-353` — a **proxy-side artifact**, not required by the protocol; omit for a clean client |
 | `anthropic-version` | **never sent anywhere** | — | PRIOR-ART by absence (repo-wide grep); see §2.4 |
@@ -78,6 +83,200 @@ on-disk secret, per `00-governance.md:36-40` (L2 must never be persisted). Also 
 
 ---
 
+## 1A. Official CLI: install, login, credentials, headers (M6)
+
+This section describes the **official** first-party client
+`@phanthy/phanthy-codeo@0.2.11` (npm, published `2026-10-21T08:56:55.362Z`). It was obtained as a tarball
+(sha256 `3134d33d4eba31ec0af543a8afa061d3b21c4df7259d49decc11928e2244d80c`) and inspected **statically only**:
+`tar -xzf` into `/tmp`, then byte slicing. Nothing was imported, installed, transpiled or executed
+(`M6-npm-package.json:83-93`; `M6-cli-config.txt:6-7`).
+
+### 1A.1 Install and login (VERIFIED-PUBLIC via `/cli`)
+
+```bash
+npm install -g @phanthy/phanthy-codeo
+phanthy-codeo auth login
+```
+
+Installer scripts published by the operator: `https://code.phanthy.com/install.sh` and
+`https://code.phanthy.com/install.ps1` (both HTTP 200, hashes and verbatim command extraction in
+`evidence/M6-cli-install.txt`). Package metadata: `bin.phanthy-codeo`, `engines.bun >=1.3.14`,
+`type: module`, MIT, repository `github.com/yizhixu/phanthy-codeo` (which is **not** the untrusted
+`github.com/witt3rd/oh-my-hermes` repository) (`M6-npm-package.json:13-37`).
+
+### 1A.2 Provider configuration (VERIFIED-STATIC)
+
+Extracted verbatim from `dist/tui-worker.js` at byte offset **7928736** (file sha256
+`c38ca895230b827838cfebb19b2b9becdf8523379118868a0f9461956f9b0c6d`); the identical block is duplicated in
+`dist/cli.js` (`M6-cli-config.txt:31-99`).
+
+| element | value |
+|---|---|
+| base URL | `https://code.phanthy.com` (no trailing slash; call sites concatenate `${base}/…`) |
+| client id | `phanthy-code-cli` |
+| provider name / ID | `phanthy` |
+| `authorize` | `https://code.phanthy.com/oauth/authorize` |
+| `token` | `https://code.phanthy.com/oauth/token` |
+| `profile` | `https://code.phanthy.com/api/oauth/profile` |
+| `models` | `https://code.phanthy.com/api/phanthy_code/models` |
+| `modelStats` | `https://code.phanthy.com/api/phanthy_code/models/stats` |
+| `messages` | `https://code.phanthy.com/v1/messages` (map entry — **never dereferenced**, see below) |
+| scopes requested (6) | `org:create_api_key`, `user:profile`, `user:inference`, `user:sessions:claude_code`, `user:mcp_servers`, `user:file_upload` |
+
+The client id `phanthy-code-cli` therefore matches the prior art's value and is now confirmed on the official
+client as well. The scope list is **6**, while the server's discovery document advertises **5** — the extra one,
+`org:create_api_key`, is not advertised server-side (see `01-endpoint-catalog.md` §5.2).
+
+### 1A.3 Credential storage layout (VERIFIED-STATIC)
+
+```
+default dir   ~/.phanthy-code/                       (override: $PHANTHY_CONFIG_DIR)
+credential    ~/.phanthy-code/.credentials.json      (path.join(dir, ".credentials.json"))
+json key      "claudeAiOauth"                        (OAuth payload; if absent the file is treated as non-OAuth)
+secondary cfg .config.json  →  else .phanthy-code.json
+macOS         `security` CLI keychain entry, service `phanthy code-credentials[-<sha256(dir)[:8]>]`
+identity      $USER ?? os.userInfo().username ?? "claude-code-user"
+```
+
+The layout is Claude-Code-shaped (path, JSON key, `claudeAiOauth`). **No credential value exists in the package
+and none was read** (`M6-cli-config.txt:102-120, 206-208`). When documenting onboarding, describe only this file
+layout and use `<access_token>` placeholders — never paste a real `.credentials.json`.
+
+The endpoint map contains `messages: https://code.phanthy.com/v1/messages`, but `nFA.messages` is **never
+dereferenced** (0 occurrences). The real message path is an Anthropic-SDK-compatible provider with
+`apiKey:"phanthy-oauth"` and `baseURL: ${base}/v1`; because the bundled SDK posts to the absolute path
+`/v1/messages`, the effective URL may be `/v1/messages` **or** `/v1/v1/messages`. M1 proved `/v1/messages`
+exists; this is recorded as **UNVERIFIED** (`M6-cli-config.txt:145-157`; `M6-index.md` §3.8).
+
+### 1A.4 Request-header family (VERIFIED-STATIC — exact casing matters)
+
+| header (exact) | map field | purpose / value seen |
+|---|---|---|
+| `x-phanthy-client` | `client` | client discriminator |
+| `X-Phanthy-Client-Source` | `clientSource` | origin marker; `cli` on the message path, `phanthy-codeo` on telemetry |
+| `x-phanthy-cli-device` | `device` | `base64url(JSON)` host fingerprint — privacy observation, see §1A.5 |
+| `X-Phanthy-Product` | `product` | `phanthy_code` / `phanthy_codeo` |
+| `x-phanthy-project` | `project` | project id of the session, when present |
+| `x-phanthy-request` | `request` | per-request UUID correlation id (regenerated per message request) |
+| `x-phanthy-session` | `session` | session id |
+
+Two names deliberately capitalise `X-Phanthy`; five use lowercase `x-phanthy-`. Preserve the casing verbatim when
+modelling them (`M6-cli-config.txt:58-73`). A non-namespaced `x-service-name: phanthy-codeo` accompanies telemetry
+flushes only. On the two discovery endpoints only `X-Phanthy-Product: phanthy_code` is sent
+(`M6-cli-config.txt:172, 180`).
+
+### 1A.5 Bearer vs `x-api-key` on `/v1/messages` (the M6 finding)
+
+The CLI's provider `fetch` **deletes `x-api-key`** and **sets `Authorization: Bearer <access token>`**, then sets
+`x-phanthy-product: phanthy_code`, `X-Phanthy-Client-Source: cli`, a `User-Agent` and a fresh `x-phanthy-request`
+UUID (`M6-cli-config.txt:145-157`).
+
+| scheme | status | consequence |
+|---|---|---|
+| `Authorization: Bearer <token>` | the only scheme the official client sends (VERIFIED-STATIC) | document Bearer as the primary scheme |
+| `x-api-key: <key>` | explicitly removed by the official client; prior art only | keep as an **unverified possibility**, never as "preferred" |
+
+Wire-level acceptance of Bearer by `/v1/*` remains `BLOCKED-CRED`. The M6 probes of EP-16/EP-17 received a
+`WWW-Authenticate: Bearer realm="phanthy-code"` challenge, which is consistent with a bearer-gated
+`/api/phanthy_code/*` surface but does not prove `/v1/*` behaves the same way.
+
+### 1A.6 Privacy observation — `x-phanthy-cli-device`
+
+The value is `base64url(JSON.stringify({…}))` covering hostname, username, platform, architecture, OS release,
+up to 32 IPv4 candidates, network interfaces and default routes (max 32)
+(`M6-cli-config.txt:195-201`). It is a host-fingerprint/telemetry design choice, **not** a vulnerability and not
+an access-control mechanism. Record it non-exploitatively: an operator running the official CLI transmits host
+identity and network topology metadata on each message request. Nothing was replayed or exercised, and no value
+is reproduced here.
+
+### 1A.7 Static-only, unverified surface (do not probe)
+
+The bundle also contains `POST ${base}/api/event_logging/batch` (telemetry batch flush, JSON `{events:[…]}`,
+Bearer + `x-service-name: phanthy-codeo`), a `dev.code.phanthy.com` build-flag host, `https://code.phanthy.com/console`
+and a web-search base URL. These are **VERIFIED-STATIC / UNVERIFIED live**; `/api/event_logging/batch` was **not**
+probed and is **not** counted in the 17 endpoints (`M6-cli-config.txt:123-166`; `01-endpoint-catalog.md` §7).
+
+---
+
+## 1B. Model discovery — `GET /api/phanthy_code/models` and `/models/stats` (M6)
+
+Added in M6b. These two routes are new relative to M1 and are catalogued as `EP-16` / `EP-17`
+(`01-endpoint-catalog.md` §3.16–§3.17). They are the routes the official CLI uses to populate its model
+picker, so they are the only known machine-readable model surface — and they are credential-gated.
+
+### 1B.1 Existence and method surface (VERIFIED-LIVE)
+
+| probe | EP-16 `/api/phanthy_code/models` | EP-17 `/api/phanthy_code/models/stats` |
+|---|---|---|
+| `OPTIONS` | `204`, `allow: GET, HEAD, OPTIONS` | identical |
+| `GET` anonymous | `401` `application/json`, 79 B | identical, byte-identical body |
+| `HEAD` anonymous | `401`, no body | identical |
+
+No `access-control-*` and no `ratelimit-*` headers were returned, and `content-length` was absent (chunked
+encoding). Gateway headers are the same Kong 2.5.1 / TencentEdgeOne set seen on every other route
+(`M6-new-endpoint-probes.txt:18-22, 28-58`).
+
+### 1B.2 Credential requirement (VERIFIED-LIVE for the challenge)
+
+```
+HTTP/2 401
+content-type: application/json
+www-authenticate: Bearer realm="phanthy-code"
+
+{"error":{"code":"missing_login","message":"Bearer access token is required."}}
+```
+
+- The challenge names **Bearer** explicitly, so the intended scheme is `Authorization: Bearer <access_token>`
+  (`bearerAuth` in the OpenAPI) — not `x-api-key`.
+- The message text is a server-side statement of the requirement, which is stronger evidence than the prior-art
+  fallback in §1.2 step 9.
+- Body is 79 B, sha256 `abeec43bb27c7cbb7c6cd3fa3bbdee2bb9f953de4f6d18d648a416d92116ebe7`, **identical on both
+  paths**. That identity is the main structural finding: one shared guard sits in front of the whole
+  `/api/phanthy_code/*` prefix (`M6-new-endpoint-probes.txt:60-140`).
+- The envelope matches the `{"error":{"code","message"}}` shape already documented in §4 (`missing_login`
+  joins `unsupported_response_type` and `invalid_platform`).
+
+### 1B.3 Usage recipe (once a token exists)
+
+```bash
+curl -sS --http2 -D - -m 20 \
+  -H 'authorization: Bearer <access_token>' \
+  -H 'accept: application/json' \
+  -H 'x-phanthy-product: phanthy_code' \
+  https://code.phanthy.com/api/phanthy_code/models
+
+curl -sS --http2 -D - -m 20 \
+  -H 'authorization: Bearer <access_token>' \
+  -H 'accept: application/json' \
+  -H 'x-phanthy-product: phanthy_code' \
+  https://code.phanthy.com/api/phanthy_code/models/stats
+```
+
+`X-Phanthy-Product: phanthy_code` is the only Phanthy-namespaced header the official CLI attaches to these two
+calls (§1A.2); that is VERIFIED-STATIC as a **client** behaviour, not verified as a server requirement. Per
+§1A.4 preserve the exact casing if it is ever sent.
+
+### 1B.4 Success schema: BLOCKED-CRED
+
+Nothing about the `200` body is known. Do **not** publish a fabricated schema, example or field list. The
+OpenAPI operations therefore carry a permissive `object` schema whose description states that the success
+schema is `BLOCKED-CRED`. What can be stated with an anchor:
+
+| statement | basis |
+|---|---|
+| response is expected to be `application/json` | CLI call sites send `accept: application/json` (`M6-cli-config.txt:160-186`) |
+| `models` feeds the model picker; `modelStats` is best-effort with a **5 s** `AbortSignal` | `M6-cli-config.txt:160-186` |
+| display aliases and credit ratios are published for 13 models | PUBLIC-MARKETING, `/token-plan` (§6.1) |
+| no `model` wire ID, context window, per-token price or endpoint mapping is published anywhere public | `M6-public-model-catalog.txt:91-102` |
+
+### 1B.5 What this changes for the earlier `/v1/models` finding (§6.5 caveat)
+
+`GET /v1/models` still returns the Next.js HTML 404 shell (verified absent, catalog §4.1). M6 refines rather
+than contradicts that: a catalogue **does** exist, but at `/api/phanthy_code/models` behind a bearer guard, not
+on the Anthropic-style `/v1/models` path. `POST /v1/messages/count_tokens` remains verified absent.
+
+---
+
 ## 2. Minimal call recipes for `POST /v1/messages`
 
 ### 2.1 Request fields (PRIOR-ART from `internal/upstream/payload.go:47-60`)
@@ -99,7 +298,7 @@ on-disk secret, per `00-governance.md:36-40` (L2 must never be persisted). Also 
 
 ### 2.2 Non-streaming recipe
 
-`curl` against the upstream, with an API key:
+`curl` against the upstream. Prior-art form, using an API key (**not** what the official client does — see §1A.5):
 
 ```bash
 curl -sS --http2 https://code.phanthy.com/v1/messages \
@@ -113,7 +312,8 @@ curl -sS --http2 https://code.phanthy.com/v1/messages \
       }'
 ```
 
-Bearer variant (the documented fallback when no API key can be minted — `cmd/login/main.go:97-104`):
+Bearer variant — the **only** scheme the official CLI sends on this path (§1A.5), and the documented prior-art
+fallback when no API key can be minted (`cmd/login/main.go:97-104`):
 
 ```bash
 curl -sS --http2 https://code.phanthy.com/v1/messages \
@@ -148,7 +348,8 @@ curl -N -sS --http2 https://code.phanthy.com/v1/messages \
 ```
 
 Expected frames and their handling are in §3. `-N` disables curl buffering; `head -c` should be used when
-capturing, and the command must not be pointed at a file that persists secrets.
+capturing, and the command must not be pointed at a file that persists secrets. To mirror the official client,
+replace the `x-api-key` line with `-H 'authorization: Bearer <access_token>'` (§1A.5).
 
 ### 2.4 `Anthropic-version` handling
 
@@ -332,9 +533,62 @@ status for quota exhaustion until the plan in §7 is executed.
 
 ---
 
-## 6. Model capability matrix
+## 6. Model roster — two independent layers
 
-### 6.1 Mapping table
+M6 established that two model vocabularies circulate and that **they are not the same list**. They are
+presented as separate layers here and must not be merged, sorted together or cross-indexed without new evidence.
+
+| layer | source | grade | what it tells you |
+|---|---|---|---|
+| **A** — public display catalogue | operator's `/token-plan` pricing page (M6) | PUBLIC-MARKETING | which model names and credit multipliers the operator advertises |
+| **B** — prior-art internal mapping | in-repo `README.md`, `payload.go`, `handler.go` | PRIOR-ART / unverified live | which upstream IDs the *proxy* sends for its own client-facing names |
+
+**No mapping between A and B has been established.** Layer A never states a wire `model` value; layer B never
+mentions any `Phanthy-*`, `Phana-*` or `Phano-*` alias. Do not assume `Phanthy-pro` = `Iris-1.0`, or any other
+pairing.
+
+### 6.1 Layer A — public display catalogue (PUBLIC-MARKETING, M6)
+
+Source: `https://code.phanthy.com/token-plan`, anonymous GET, 49,225 B, sha256
+`2abf943b6cab2090ed737618f76b03473319dc9e1704a90840f8c061cb40be8a` (`M6-public-model-catalog.txt:4-8,
+27-43`). Names and ratios are reproduced verbatim, including the literal `x积分` suffix; the trailing `o`/`s`
+characters in the `Phana`/`Phano` rows are U+006F/U+0073 and must not be "corrected"
+(`M6-public-model-catalog.txt:124-130`).
+
+| # | display name | credit ratio (verbatim) | scenario (summary) |
+|---|---|---|---|
+| 1 | `Phanthy-fast` | `0.00x积分` | fast/cheap Q&A, summary, translation, rewriting |
+| 2 | `Phanthy-pro` | `0.33x积分` | general strong model: office, coding, analysis, agent |
+| 3 | `Phanthy-ultra` | `0.67x积分` | top-tier reasoning, deep research, hardest agent work |
+| 4 | `glm-5.3-flash` | `0.04x积分` | cost-optimised GLM, coding/agent/multimodal |
+| 5 | `glm-5.3` | `0.38x积分` | Zhipu flagship |
+| 6 | `glm-5.2` | `0.38x积分` | previous Zhipu flagship, long-context |
+| 7 | `kimi-k3` | `1.00x积分` | Kimi flagship, long context |
+| 8 | `kimi-k2.7-code` | `0.31x积分` | coding-specialised Kimi |
+| 9 | `deepseek-v4.1-flash-1017` | `0.10x积分` | DeepSeek fast/balanced |
+| 10 | `Phana-5.5o` | `0.67x积分` | placeholder scenario text (`Available model`) |
+| 11 | `Phana-5.5s` | `0.33x积分` | placeholder scenario text (`Available model`) |
+| 12 | `Phano-6a` | `1.67x积分` | placeholder scenario text (`Available model`) |
+| 13 | `Phano-6.1s` | `0.33x积分` | placeholder scenario text (`Available model`) |
+
+Reading rules for this table:
+
+- A ratio is a **credit multiplier**, printed as `N.NNx积分`. It is *not* a price per 1k tokens, and no
+  per-token price can be derived from it (`M6-public-model-catalog.txt:104-106`).
+- Four of the 13 rows carry the literal placeholder `Available model` instead of a scenario — the operator
+  appears to have staged these entries ahead of their descriptions. Do not infer capabilities from them.
+- `data-series` / logo assets are presentation only: `phana*` rows use `anthropic.svg`, `phano*` rows use
+  `openai.svg`, `phanthy*` use `phanthy.jpg`. The page does **not** state an upstream mapping
+  (`M6-public-model-catalog.txt:45-65`).
+- Not published on the page: wire model IDs, context windows / max tokens, per-token prices, rate limits,
+  endpoint mapping, credit-balance API (`M6-public-model-catalog.txt:91-102`).
+
+Plan tiers referenced by the same page (verbatim prices, PUBLIC-MARKETING): 体验版 ¥0/月 · 2,000 积分/月;
+标准版 ¥9.9/月 (struck 原价 ¥99) · 15,000 积分/月; 高级版 ¥139/月 (struck 原价 ¥199) · 30,000+2,000 积分/月;
+旗舰版 ¥699/月 (struck 原价 ¥999) · 150,000+20,000 积分/月. Value note: `每 1,000 积分约等于 1 美元`
+(`M6-public-model-catalog.txt:71-85`).
+
+### 6.2 Layer B — prior-art internal mapping table (PRIOR-ART / unverified live)
 
 Label for the whole table: **PRIOR-ART / unverified live.** Sources: `README.md:120-134`,
 `internal/upstream/payload.go:75-89`, tests `internal/upstream/payload_test.go:167-194`,
@@ -356,27 +610,44 @@ proxy-side model list `internal/server/handler.go:93-108`.
 | 12 | `GLM 5.2` | `Metis-1.1` | Metis | Zhipu GLM line, newest | PRIOR-ART / unverified live |
 | 13 | `GLM-5.1` | `Metis-1.0` | Metis | previous point release | PRIOR-ART / unverified live |
 
-### 6.2 Capability statements and their basis
+### 6.3 Why layer A and layer B cannot be joined
+
+- Vocabulary overlap is suggestive but not probative: `kimi-k2.7-code` appears as a display alias (§6.1 #8) and
+  `Kimi-k2.7-code` as a prior-art client name (§6.2 #10); `glm-5.2` / `GLM 5.2` likewise. Similar strings do
+  **not** establish that the upstream IDs are the same.
+- Layer A's naming scheme (`Phanthy-*`, `Phana-*`, `Phano-*`) has **zero** occurrences in the in-repo Go code or
+  README, and layer B's family IDs (`Iris`, `Zeus`, `Gaia`, `Apollo`, `Metis`) have **zero** occurrences on the
+  public page.
+- The machine-readable catalogue (EP-16) that could settle it returns `401` anonymously (§1B), and the CLI's
+  `models` call was never executed. Until one authenticated `GET /api/phanthy_code/models` is performed, the
+  mapping is `BLOCKED-CRED`.
+- Consequence for tooling: accept **both** vocabularies as pass-through names. The proxy already forwards
+  unknown model names unchanged (`payload.go:91-97`), so no allow-list should be enforced.
+
+### 6.4 Capability statements and their basis
 
 | capability | statement | grade / basis |
 |---|---|---|
 | context window | 200,000 tokens declared for every model | PRIOR-ART (`handler.go:95-107` — the proxy's own static list). No upstream evidence. |
-| tool/function calling | all 13 models accept `tools` and emit `tool_use` streaming blocks | INFERRED: the proxy converts tools for every request (`payload.go:212-223`) and parses `tool_use` + `input_json_delta` (`sse.go:207-231, 251-263`); it applies no per-model gating |
+| tool/function calling | all 13 prior-art models accept `tools` and emit `tool_use` streaming blocks | INFERRED: the proxy converts tools for every request (`payload.go:212-223`) and parses `tool_use` + `input_json_delta` (`sse.go:207-231, 251-263`); it applies no per-model gating |
 | extended thinking | at least one upstream model emits `thinking_delta` blocks | INFERRED: a handler exists (`sse.go:245-250`). Which model, and whether it must be requested explicitly, is **unknown** (no `thinking` request field exists in `payload.go:47-60`) |
 | vision / images | **not supported through the proxy** | PRIOR-ART: image parts are replaced by the text `"[image]"` (`payload.go:294-298`) |
 | upstream model naming | `/v1/messages` expects the real IDs (`Iris-1.0`, …), not the commercial names | PRIOR-ART comment `payload.go:73-74`; no live confirmation |
 | unknown names | passed through unchanged (no 400 from the proxy) | PRIOR-ART `payload.go:91-97` |
 
-### 6.3 Availability caveats (why this table cannot be tightened without a token)
+### 6.5 Availability caveats (why neither table can be tightened without a token)
 
-- `GET /v1/models` returns the **HTML 404 shell** (26,579 B), i.e. no model catalogue over HTTP
-  (`M1-anon-probe-matrix.txt:73`; `M1-options-matrix.txt:25`).
+- `GET /v1/models` returns the **HTML 404 shell** (26,579 B), i.e. no catalogue on the Anthropic-style path
+  (`M1-anon-probe-matrix.txt:73`; `M1-options-matrix.txt:25`). **Refined by M6:** a catalogue does exist at
+  `GET /api/phanthy_code/models` (EP-16), but anonymously it answers `401` (§1B), so it is not readable either.
 - The 12 analysed public JS chunks contain **zero** matches for `Iris`, `Zeus`, `Gaia`, `Apollo`, `Metis`,
   `DeepSeek`, `Claude`, `Kimi`, `GLM` (`M1-js-static-analysis.txt:46-54, 97-123`).
-- Model IDs are therefore obtainable only from (a) an authenticated `/v1/messages` response, or (b) vendor
-  documentation. `M1-index.md:213-214` records exactly this gap.
-- Do not present this matrix as a live catalogue in M4. Use the label `PRIOR-ART / unverified live` in the
-  OpenAPI description and in the report.
+- The public pricing page publishes display aliases only, no wire IDs (§6.1). The official CLI bundle contains
+  the endpoint URLs but no model list, so the CLI cannot fill the gap statically either.
+- Model IDs are therefore obtainable only from (a) an authenticated `GET /api/phanthy_code/models` (EP-16), or
+  (b) an authenticated `/v1/messages` response. `M1-index.md:213-214` records exactly this gap.
+- Do not present either table as a live catalogue. Use `PUBLIC-MARKETING` for layer A and
+  `PRIOR-ART / unverified live` for layer B in the OpenAPI description and in the report.
 
 ---
 
@@ -386,13 +657,14 @@ proxy-side model list `internal/server/handler.go:93-108`.
 
 | id | unknown | needs |
 |---|---|---|
-| U1 | `/v1/messages` auth scheme: `x-api-key` vs `Authorization: Bearer` | token (and/or key) |
+| U1 | `/v1/messages` auth scheme: `x-api-key` vs `Authorization: Bearer` | token (and/or key). **Narrowed by M6:** the official CLI sends Bearer only (§1A.5); wire acceptance still unproven |
 | U2 | non-streaming JSON response shape | token |
 | U3 | exact SSE frame sequence, headers, termination | token |
 | U4 | error envelope of an authenticated 4xx | token |
 | U5 | `/api/oauth/profile` schema | token |
 | U6 | `/api/oauth/claude_cli/roles` schema | token |
 | U7 | token TTL / `expires_in` / refresh rotation | token + `POST /oauth/token` — **excluded below** (governance) |
+| U8 | success bodies of `GET /api/phanthy_code/models` and `/models/stats` (EP-16/EP-17), and the alias→wire-ID mapping | token — **excluded from the 5-call plan below**; needs its own budget line |
 
 ### 7.2 Governance constraint on the plan
 
@@ -490,12 +762,15 @@ spec because its contract is unknown (catalog §3.11).
 | `GET /api/public-assets` | §3.13 | `M1-anon-probe-matrix.txt:77, 247-255` | `publicAssetsGet` | Model the `308` from the slash form; target unprobed → no response schema. |
 | `GET /robots.txt` | §3.14 | `M1-anon-probe-matrix.txt:80, 369-402` | `robotsGet` | `text/plain`. |
 | `GET /sitemap.xml` | §3.15 | `M1-anon-probe-matrix.txt:81, 404-438` | `sitemapGet` | `application/xml`; 841 URLs; do not inline the body. |
+| `GET /api/phanthy_code/models` | §3.16 | `M6-new-endpoint-probes.txt:25-105` | `phanthyModelsGet` | **Added M6.** `bearerAuth`; success schema `BLOCKED-CRED`; `401` uses the shared error envelope + `WWW-Authenticate: Bearer realm="phanthy-code"`. |
+| `GET /api/phanthy_code/models/stats` | §3.17 | `M6-new-endpoint-probes.txt:110-190` | `modelStatsGet` | **Added M6.** Same guard and same `401` body as EP-16; tag `Inference`. |
 
-Endpoints that must **not** appear as operations in M4 (verified absent, HTML 404): `/v1/models`,
+Endpoints that must **not** appear as operations (verified absent, HTML 404): `/v1/models`,
 `/v1/messages/count_tokens`, `/api/health`, `/healthz`, `/api/oauth/phanthy_cli/create_api_key`,
 `/api/oauth/claude_cli/create_api_key` (catalog §4.1). Their absence is itself a documented finding: the
 access-token fallback (`internal/upstream/client.go:344-350`) is the only viable `/v1/messages` credential path
-until a token proves otherwise.
+until a token proves otherwise. **M6 refinement:** `/v1/models` stays absent, but model discovery is not absent
+from the site — it lives at `EP-16` / `EP-17` (§1B), behind a bearer guard.
 
 ---
 
@@ -505,3 +780,10 @@ Authored `2026-10-26` from the M1 evidence package only; zero network requests; 
 value read, copied or written. The M1 acceptance report's numeric caveats (D1–D8, catalog §1.6) are honoured
 throughout: no probe totals, no byte-for-byte OIDC comparison, no JS aggregate size, and the 405/`Allow`
 statement is scoped to API routes.
+
+Extended in **M6b** (`2026-10-26`) with the M6 evidence package: §1A (official CLI install/login, credentials,
+header family, Bearer finding), §1B (model discovery, EP-16/EP-17), §6 (two-layer roster), §7.1 U8 and the
+§8 operationIds `phanthyModelsGet` / `modelStatsGet`. M6b itself issued **zero** network requests; it inherits
+the M6 anonymous probes (`M6-new-endpoint-probes.txt`) and the M6 static extraction
+(`M6-npm-package.json`, `M6-cli-config.txt`), in which the official npm package was inspected as a tarball and
+**never installed or executed**.

@@ -1,0 +1,131 @@
+M6-public-model-catalog.txt — published model table and plan tiers from the public pricing page
+====================================================================================================
+
+URL            : https://code.phanthy.com/token-plan
+HTTP           : 200, content-type text/html; charset=utf-8, 49225 bytes
+Captured (UTC) : 2026-10-26T00:19:52Z   (2026-10-26T08:19:52+08:00)
+sha256         : 2abf943b6cab2090ed737618f76b03473319dc9e1704a90840f8c061cb40be8a
+sha256 expected: 2abf943b6cab2090ed737618f76b03473319dc9e1704a90840f8c061cb40be8a  -> MATCH
+Access         : anonymous, no login, no cookie, no token; plain GET through the sandbox egress proxy
+Language       : page served in Chinese (zh) by default; one English fragment appears in the model table (noted below)
+
+Reproduction:
+  curl -sS --http2 -o /tmp/m6/token-plan.html 'https://code.phanthy.com/token-plan'
+  sha256sum /tmp/m6/token-plan.html
+  python3 - <<'PY'   # table rows only, no JS execution
+  import re;d=open('/tmp/m6/token-plan.html').read()
+  for m in re.finditer(r'<strong>(.*?)</strong>',d): print(m.group(1))
+  PY
+
+----------------------------------------------------------------------------------------------------
+1. MODEL TABLE — '可用模型列表' (Available model list); columns: 模型 | 适用场景 | 积分倍率
+----------------------------------------------------------------------------------------------------
+
+Display names are reproduced with exact casing and punctuation as rendered in <strong> elements.
+Ratio strings are reproduced exactly as printed (including the literal 'x积分' suffix).
+
+| # | display name | scenario (verbatim) | credit ratio (verbatim) |
+|---|---|---|---|
+| 1 | `Phanthy-fast` | 快速高效 · 限时免费，适合问答、摘要、翻译、改写和简单办公任务 | 0.00x积分 |
+| 2 | `Phanthy-pro` | 全球前沿 · 强大通用，适合复杂办公、Coding、分析和 Agent 任务 | 0.33x积分 |
+| 3 | `Phanthy-ultra` | 全球顶尖智能 · 追求极致质量，适合高难度推理、深度研究和最复杂 Agent 任务 | 0.67x积分 |
+| 4 | `glm-5.3-flash` | 前沿智能 · 极致性价比，兼顾 Coding、Agent、多模态和复杂任务处理 | 0.04x积分 |
+| 5 | `glm-5.3` | 智谱旗舰 · 综合能力强，适合复杂办公、Coding、分析和 Agent 任务 | 0.38x积分 |
+| 6 | `glm-5.2` | 智谱上代旗舰 · 长程稳定 ，适合长文档、代码库和复杂持续任务 | 0.38x积分 |
+| 7 | `kimi-k3` | Kimi 旗舰 · 擅长长上下文，适合研究、复杂分析和长程 Agent 任务 | 1.00x积分 |
+| 8 | `kimi-k2.7-code` | 编程专用 · 为 Coding Agent 优化，适合代码生成、调试和仓库级开发 | 0.31x积分 |
+| 9 | `deepseek-v4.1-flash-1017` | deepseek最新模型 · 高效推理 · 速度与成本均衡，适合分析、Coding 和高频复杂任务 | 0.10x积分 |
+| 10 | `Phana-5.5o` | Available model | 0.67x积分 |
+| 11 | `Phana-5.5s` | Available model | 0.33x积分 |
+| 12 | `Phano-6a` | Available model | 1.67x积分 |
+| 13 | `Phano-6.1s` | Available model | 0.33x积分 |
+
+Count: 13 published rows (9 with a substantive scenario description, 4 carrying the placeholder string 'Available model').
+
+Branding / series metadata carried by the markup (not part of the visible table text):
+
+| display name | data-series | logo asset |
+|---|---|---|
+| `Phanthy-fast` | phanthy | `/model-logos/phanthy.jpg` |
+| `Phanthy-pro` | phanthy | `/model-logos/phanthy.jpg` |
+| `Phanthy-ultra` | phanthy | `/model-logos/phanthy.jpg` |
+| `glm-5.3-flash` | glm | `/model-logos/glm.png` |
+| `glm-5.3` | glm | `/model-logos/glm.png` |
+| `glm-5.2` | glm | `/model-logos/glm.png` |
+| `kimi-k3` | kimi | `/model-logos/kimi.ico` |
+| `kimi-k2.7-code` | kimi | `/model-logos/kimi.ico` |
+| `deepseek-v4.1-flash-1017` | deepseek | `/model-logos/deepseek.svg` |
+| `Phana-5.5o` | phana | `/model-logos/anthropic.svg` |
+| `Phana-5.5s` | phana | `/model-logos/anthropic.svg` |
+| `Phano-6a` | phano | `/model-logos/openai.svg` |
+| `Phano-6.1s` | phano | `/model-logos/openai.svg` |
+
+Reading of the series/logo hints: phana* rows use the Anthropic logo asset and phano* rows use the
+OpenAI logo asset, while phanthy/glm/kimi/deepseek rows use vendor logos. The page does not state
+which upstream model each alias maps to; treat the logo as presentation only, not as an API mapping.
+
+----------------------------------------------------------------------------------------------------
+2. PLAN TIERS — '个人方案与定价'
+----------------------------------------------------------------------------------------------------
+
+| plan | price (as printed) | credits | description | CTA / plan slug |
+|---|---|---|---|---|
+| 体验版 | ¥0/月 | 2,000 积分 / 月 | 限时全部模型可选，注册即可开始体验。 | `/register` |
+| 标准版 | ¥9.9/月 [struck through: 原价 ¥99/月] | 15,000 积分 / 月 | 适合日常编码和轻量 Agent 会话。 | `/login?next=%2Fpayment%3Fplan%3Dstandard` |
+| 高级版 | ¥139/月 [struck through: 原价 ¥199/月] | 30,000积分 + 2,000积分 / 月 | 适合高频编码和更长 Agent 会话。 | `/login?next=%2Fpayment%3Fplan%3Dpremium` |
+| 旗舰版 | ¥699/月 [struck through: 原价 ¥999/月] | 150,000积分 + 20,000积分 / 月 | 适合高强度使用和团队工作流。 | `/login?next=%2Fpayment%3Fplan%3Dultimate` |
+
+  体验版 — all bullet points: 2,000 积分 / 月 / 限时全部模型可选 / 体验权益有效期 30 天 / 完成真实任务并检查交付成果
+  标准版 — all bullet points: 15,000 积分 / 月 / 完整模型目录
+  高级版 — all bullet points: 30,000积分 + 2,000积分 / 月 / 完整模型目录
+  旗舰版 — all bullet points: 150,000积分 + 20,000积分 / 月 / 完整模型目录
+
+Site-wide value note printed above the plans (verbatim):
+  '每 1,000 积分约等于 1 美元价值的 Token 额度。'
+  (i.e. 1,000 credits ~= USD 1 of token value. This is a marketing equivalence, not a rate card.)
+
+Announcement banner (verbatim):
+  '注册账户即送每月2000积分，标准版首月限时特惠9.9元，各订阅方案7折惊喜优惠~'
+
+----------------------------------------------------------------------------------------------------
+3. FIELDS THAT ARE ABSENT FROM THIS PAGE — marked 'not published'
+----------------------------------------------------------------------------------------------------
+
+  model id / API slug ............... not published   (only display aliases appear; no `model` wire value)
+  context window / max tokens ....... not published   (page has no context or token-limit column)
+  per-token input/output price ...... not published   (only an abstract credit multiplier)
+  rate limits / concurrency ......... not published
+  endpoint or protocol mapping ...... not published   (no mention of /v1/messages or /api/phanthy_code/*)
+  model->upstream vendor mapping .... not published   (logo assets only; not a stated mapping)
+  credit balance / usage API ........ not published
+  availability per plan ............. partially published: '完整模型目录' on paid tiers, '限时全部模型可选'
+                                      for the free tier; no per-row availability matrix
+
+Credit-ratio caveat: the ratio is printed as a multiplier of credit consumption (e.g. '0.33x积分'),
+NOT as a per-1k-token price. No numeric price per model can be derived without the credit accounting
+rules, which the page does not publish.
+
+----------------------------------------------------------------------------------------------------
+4. PROVENANCE / GRADE
+----------------------------------------------------------------------------------------------------
+
+Grade: PUBLIC-MARKETING.
+This is a marketing/pricing page rendered by the public Next.js site. It is NOT an API contract:
+  - no schema, no field names, no status codes, no auth requirements;
+  - display aliases may differ from the model identifiers accepted by the API;
+  - ratios and prices are commercial statements that can change without notice;
+  - nothing here was cross-checked against an authenticated API response (none was obtained).
+Use it only as evidence of what the operator publicly advertises, never as a specification.
+
+Cross-reference: the anonymous GET /api/phanthy_code/models returns 401 (see M6-new-endpoint-probes.txt),
+so the machine-readable catalogue could not be compared with this page.
+
+----------------------------------------------------------------------------------------------------
+5. TYPOGRAPHIC NOTE
+----------------------------------------------------------------------------------------------------
+
+The trailing/leading characters in `Phana-5.5o`, `Phana-5.5s`, `Phano-6a`, `Phano-6.1s` are easy to
+mistype. Byte-level check of the HTML: `Phana-5.5o` ends with U+006F (Latin small letter o), and
+`Phano-6a` / `Phano-6.1s` contain U+006F inside 'Phano'. No digit zero (U+0030) occurs in any display
+name except `deepseek-v4.1-flash-1017` ('1017'). Names are reproduced unchanged above; do not 'correct' them.
+

@@ -4,7 +4,7 @@ Companion files in this directory:
 
 | file | purpose |
 |---|---|
-| `openapi.json` | OpenAPI 3.1.0 bundle, 15 operations, 13 shared schemas, 7 tags/folders. |
+| `openapi.json` | OpenAPI 3.1.0 bundle, 17 operations, 13 shared schemas, 7 reusable header parameters, 7 tags/folders. |
 | `push_apifox.py` | Standard-library-only validator + optional Apifox Open API push client. |
 | `IMPORT.md` | This guide. |
 
@@ -37,11 +37,12 @@ Verified facts (quoted from that page):
 required `X-Apifox-Api-Version` header. `--api-base` / `--import-path` / `--api-version`
 override the documented defaults for private deployments or endpoint changes.
 
-**UNVERIFIED (runtime):** the push HTTP call itself has **never been executed** — no
+**UNVERIFIED (real tenant):** the push HTTP call has **never been executed against `api.apifox.com`** — no
 `APIFOX_ACCESS_TOKEN` was available in this environment (`re/evidence/M0-preflight.json:18`:
-`apifox_credentials: ABSENT`). The *documented endpoint shape* above is verified; the *live push*
-remains **UNVERIFIED** until you supply a token and run `--push`. Local validation and `--dry-run`
-are fully verified and exit 0.
+`apifox_credentials: ABSENT`). The *documented endpoint shape* above is verified; it has also been
+exercised end-to-end against a **local mock** of the import endpoint (`127.0.0.1`, see §2.2 and
+`re/evidence/M4-push-mock.txt`). The *live push against the real tenant* remains **UNVERIFIED** until
+you supply a token and run `--push`. Local validation and `--dry-run` are fully verified and exit 0.
 
 ---
 
@@ -57,7 +58,7 @@ are fully verified and exit 0.
    - Leave **prepend base path** off; the server URL is carried by the collection environment
      instead (see §3).
    - Do **not** enable “delete unmatched resources”.
-5. Confirm. Apifox creates one folder per tag and 15 operations (see §4).
+5. Confirm. Apifox creates one folder per tag and 17 operations (see §4).
 
 ### Tag → folder mapping
 
@@ -66,7 +67,7 @@ are fully verified and exit 0.
 | `OAuth` | `oauthAuthorize`, `oauthToken`, `oauthRevoke`, `oauthCodeSuccessGet` |
 | `OIDC` | `openidConfigurationGet`, `jwksGet` |
 | `Account` | `profileGet`, `claudeCliRolesGet` |
-| `Inference` | `messagesCreate` |
+| `Inference` | `messagesCreate`, `phanthyModelsGet`, `modelStatsGet` |
 | `Web` | `appShellGet`, `webEventsCreate` |
 | `Assets` | `clientDownloadGet`, `publicAssetsGet` |
 | `Meta` | `robotsGet`, `sitemapGet` |
@@ -110,6 +111,12 @@ python3 push_apifox.py --spec openapi.json --push \
   --timeout 60
 ```
 
+The `--push` path has been exercised end-to-end against a **local** mock of the import endpoint
+(`127.0.0.1` only, no traffic to `api.apifox.com`): the captured request had `input` as a JSON
+string, `AUTO_MERGE` options, `Authorization: Bearer …`, `X-Apifox-Api-Version: 2024-03-28`, and
+the client exited `0` on a `200`. See `evidence/M4-push-mock.txt`. What remains unverified is only
+whether the real tenant accepts the spec — that needs `APIFOX_ACCESS_TOKEN` + `APIFOX_PROJECT_ID`.
+
 Exit codes:
 
 | code | meaning |
@@ -137,11 +144,32 @@ The bundle declares two security schemes:
 
 | scheme | type | placement | use |
 |---|---|---|---|
-| `apiKeyAuth` | `apiKey` | header `x-api-key` | Primary prior-art credential for `POST /v1/messages`. |
-| `bearerAuth` | `http` / `bearer` | `Authorization: Bearer <token>` | Verified guard on `/api/oauth/profile` and `/api/oauth/claude_cli/roles`; fallback credential for `/v1/messages`. |
+| `apiKeyAuth` | `apiKey` | header `x-api-key` | **Unverified prior-art alternative** for `POST /v1/messages`. The official CLI deletes this header and uses Bearer only (`re/evidence/M6-cli-config.txt:145-157`), so do not treat it as preferred. |
+| `bearerAuth` | `http` / `bearer` | `Authorization: Bearer <token>` | Verified guard on `/api/oauth/profile`, `/api/oauth/claude_cli/roles`, `/api/phanthy_code/models` and `/api/phanthy_code/models/stats`; the only scheme the official CLI sends on `/v1/messages`. |
 
 `messagesCreate` declares **both as alternatives** (`security: [{apiKeyAuth: []}, {bearerAuth: []}]`).
-`profileGet` and `claudeCliRolesGet` declare only `bearerAuth`.
+`profileGet`, `claudeCliRolesGet`, `phanthyModelsGet` and `modelStatsGet` declare only `bearerAuth`.
+
+### 3.0 Optional Phanthy client headers
+
+Seven reusable header parameters live in `components.parameters` and are attached (all optional) to
+`messagesCreate`, `phanthyModelsGet` and `modelStatsGet`:
+
+| parameter | header (exact casing) |
+|---|---|
+| `XPhanthyClient` | `x-phanthy-client` |
+| `XPhanthyClientSource` | `X-Phanthy-Client-Source` |
+| `XPhanthyCliDevice` | `x-phanthy-cli-device` |
+| `XPhanthyProduct` | `X-Phanthy-Product` |
+| `XPhanthyProject` | `x-phanthy-project` |
+| `XPhanthyRequest` | `x-phanthy-request` |
+| `XPhanthySession` | `x-phanthy-session` |
+
+They are **client-side behaviour observed in the official CLI bundle** (`VERIFIED-STATIC`), not proven
+server requirements. Only `X-Phanthy-Product` is sent by the CLI on the two model-discovery calls.
+Apifox will show all seven on the three requests; leave them disabled unless you are deliberately
+mirroring the official client. `x-phanthy-cli-device` is a host fingerprint — use the
+`<device_fingerprint>` placeholder and never paste a real value.
 
 ### 3.1 Environment variables
 
@@ -159,13 +187,15 @@ bundle keeps `prependBasePath` off.
 ### 3.2 Wiring the auth
 
 1. **Collection/folder Auth**: choose **Bearer Token**, value `{{token}}`.
-2. For the `Inference` folder, set **API Key** auth: key name `x-api-key`, value `{{apiKey}}`,
-   “Add to” = **Header**. Because the two schemes are alternatives, use one per request — do not
-   send both. If no API key can be minted (both `create_api_key` paths are verified absent), switch
-   that request to Bearer.
+2. For the `Inference` folder, prefer **Bearer Token** (`{{token}}`) for every request — that is what
+   the official CLI uses for all four of its inference/model calls. `POST /v1/messages` additionally
+   offers the alternative API Key auth (key name `x-api-key`, value `{{apiKey}}`, “Add to” =
+   **Header**); because the two schemes are alternatives, use one per request — do not send both. If
+   no API key can be minted (both `create_api_key` paths are verified absent), use Bearer.
 3. Never commit real values into the spec. `openapi.json` contains only placeholders:
    `<api_key>`, `<access_token>`, `<token>`, `<authorization_code>`, `<pkce_code_verifier>`,
-   `<refresh_token>`, `<state>`, `<user_id>`.
+   `<refresh_token>`, `<state>`, `<user_id>`, `<device_fingerprint>`, `<project_id>`,
+   `<request_uuid>`, `<session_id>`.
 
 **Security note:** the Apifox cloud environment stores whatever you type into it. Use a dedicated
 account whose token you can revoke, and do not reuse a production credential.
@@ -175,7 +205,7 @@ account whose token you can revoke, and do not reuse a production credential.
 ## 4. What will be created
 
 - **7 folders/tags**: `OAuth`, `OIDC`, `Account`, `Inference`, `Web`, `Assets`, `Meta`.
-- **15 operations**, exactly one per `operationId`:
+- **17 operations**, exactly one per `operationId`:
 
 | # | operationId | method | path |
 |---|---|---|---|
@@ -194,10 +224,13 @@ account whose token you can revoke, and do not reuse a production credential.
 | 13 | `publicAssetsGet` | GET | `/api/public-assets/` |
 | 14 | `robotsGet` | GET | `/robots.txt` |
 | 15 | `sitemapGet` | GET | `/sitemap.xml` |
+| 16 | `phanthyModelsGet` | GET | `/api/phanthy_code/models` |
+| 17 | `modelStatsGet` | GET | `/api/phanthy_code/models/stats` |
 
 - **13 schemas**: `ErrorDetail`, `ErrorEnvelope`, `TokenResponse`, `OpenIDConfiguration`, `Jwks`,
   `Jwk`, `AnthropicMessagesRequest`, `MessageParam`, `ContentBlock`, `Tool`, `ToolChoice`, `Usage`,
   `MessageResponse`.
+- **7 reusable parameters**: the seven optional Phanthy headers listed in §3.0.
 - **No JSON 404 response object** anywhere: a 404 on this target is a Next.js HTML shell.
 
 ### 4.1 Intentionally excluded
@@ -208,14 +241,14 @@ account whose token you can revoke, and do not reuse a production credential.
 | a `200` response or body for `publicAssetsGet` | only the `308` redirect from `/api/public-assets/` was observed; the target was never followed (`re/docs/01-endpoint-catalog.md:391-406`). |
 | a request body / success schema for `webEventsCreate` | contract unverified; the operation carries a single `default` response marked “UNVERIFIED” and `x-contract-status: unverified`. |
 | platform values other than `linux` in `clientDownloadGet` | `linux` accepted, `darwin` rejected; wider vocabulary unproven, so the enum contains only `linux`. |
-| a model catalogue / enum of model IDs | `/v1/models` is absent and the bundles contain no model strings; roster is PRIOR-ART / unverified live (`re/docs/02-usage-semantics.md:335-379`). |
+| a model catalogue / enum of model IDs | neither model operation asserts a success schema (`BLOCKED-CRED`), and the public page publishes display aliases only — no wire IDs. The two roster layers must not be merged (`re/docs/02-usage-semantics.md` §6). |
 | 402 / 429 / 5xx error responses | never observed; those classes belong to the proxy classifier, not the target (`re/docs/02-usage-semantics.md:283-290`). |
 
 ---
 
 ## 5. Re-importing idempotently
 
-- **Stable identity is the `operationId`.** All 15 are fixed and unique, so Apifox matches existing
+- **Stable identity is the `operationId`.** All 17 are fixed and unique, so Apifox matches existing
   endpoints rather than creating duplicates.
 - Use **`AUTO_MERGE`** for both endpoints and schemas (the default in `push_apifox.py`). It updates
   matching items and preserves local edits Apifox cannot derive from the file.
@@ -259,7 +292,7 @@ If the documented endpoint ever changes, override `--import-path` (with `{projec
 
 | item | status |
 |---|---|
-| `openapi.json` parses as JSON; 15 paths / 15 unique operations / 13 schemas / 21 local `$ref`s resolve | **VERIFIED locally** |
+| `openapi.json` parses as JSON; 17 paths / 17 unique operations / 13 schemas / 7 reusable parameters / 44 local `$ref`s resolve | **VERIFIED locally** |
 | `python3 push_apifox.py --self-test` exits 0 | **VERIFIED locally** |
 | Apifox documented endpoint, required headers, `input`/`options` shape | **VERIFIED against official docs on 2026-10-26** |
-| Live Apifox push | **UNVERIFIED** — no `APIFOX_ACCESS_TOKEN` was available; only exercised when you supply one |
+| Live Apifox push (real tenant) | **UNVERIFIED** — no `APIFOX_ACCESS_TOKEN` was available; the client path itself is proven against a local mock (`re/evidence/M4-push-mock.txt`) |

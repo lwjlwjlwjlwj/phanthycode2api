@@ -1,0 +1,60 @@
+# M6 — Official CLI install/login evidence (PUBLIC, anonymous)
+
+captured_at: 2026-10-26T09:07:11+08:00
+method: anonymous GET of public pages and installer scripts; scripts were read as text only and were NOT executed.
+
+## Capture hashes
+
+| artifact | URL | HTTP | bytes | sha256 |
+|---|---|---|---|---|
+| CLI landing page | https://code.phanthy.com/cli | 200 | 30451 | 422067f91d4630d803e0fe90ae6ad5e7e3644c8d9a0cd4a56cdf48d78b395ad2 |
+| POSIX installer | https://code.phanthy.com/install.sh | 200 | 7905 | 5e0df605371d2a36453fe4a788165432632f720c037230bfebd15706c4ab2116 |
+| PowerShell installer | https://code.phanthy.com/install.ps1 | 200 | 6489 | b5c9b701c9b488f9651769a766bdb977f52e9fc912e32c97205ad8e5c4c9d12d |
+
+## Commands published on `/cli`
+
+Verbatim strings extracted from the page's RSC payload:
+
+```sh
+curl -fsSL https://code.phanthy.com/install.sh | bash
+```
+
+```powershell
+irm https://code.phanthy.com/install.ps1 | iex
+```
+
+```sh
+npm install -g @phanthy/phanthy-codeo
+phanthy-codeo auth login
+```
+
+## Installer facts (static read, not executed)
+
+`install.sh` header:
+
+```sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+PACKAGE_NAME="${PHANTHY_CODE_PACKAGE:-@phanthy/phanthy-codeo}"
+PACKAGE_VERSION="${PHANTHY_CODE_VERSION:-latest}"
+MIN_BUN_VERSION="${PHANTHY_CODE_MIN_BUN_VERSION:-1.3.13}"
+```
+
+`install.ps1` header:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+
+function Say([string]$Message) {
+  Write-Host "phanthy-codeo: $Message"
+```
+
+Both installers bootstrap `@phanthy/phanthy-codeo` at `latest` and manage a Bun runtime
+(`https://cdn.npmmirror.com/binaries/bun/...`); registry fallbacks reference
+`registry.npmjs.org` and `registry.npmmirror.com`.
+
+## Evidence grade
+
+`VERIFIED-PUBLIC`: the page content, installer URLs and their hashes were directly observed
+anonymously on 2026-10-26. This is operator-published installation UX, not an API contract.

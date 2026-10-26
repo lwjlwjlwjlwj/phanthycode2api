@@ -1,0 +1,49 @@
+# M4 — push path exercised end-to-end against a local mock (no external network)
+
+captured_at: 2026-10-26T09:41+08:00
+purpose: prove that `apifox/push_apifox.py --push` is correct and ready, so that B1 (Apifox
+credential) is the only thing standing between the current tree and a real import.
+scope: the mock server binds `127.0.0.1` only; proxy variables were unset for the call. Nothing
+was sent to `api.apifox.com`. The token used was the literal placeholder `mock-token-not-real`.
+
+## Command
+
+```bash
+python3 /tmp/mock_apifox.py 18765        # local-only HTTPServer, captures one POST, returns 200
+cd /workspace/re/apifox
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+  NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
+  APIFOX_ACCESS_TOKEN=mock-token-not-real \
+  python3 push_apifox.py --push --api-base http://127.0.0.1:18765 --project-id 000000 --timeout 10
+echo "PUSH_EXIT=$?"                       # -> 0
+```
+
+## Observed client behaviour
+
+| item | observed |
+|---|---|
+| request line | `POST /v1/projects/000000/import-openapi` |
+| `Authorization` | `Bearer mock-token-not-real` (read from `APIFOX_ACCESS_TOKEN` only, never argv) |
+| `X-Apifox-Api-Version` | `2024-03-28` |
+| `Content-Type` | `application/json` |
+| `input` type | `str` (the documented default form; **not** an object) |
+| `input` length | 82,895 chars (the full `openapi.json` text) |
+| `input` head | `{ "openapi": "3.1.0", "info": { "title": "PhanthyCod…` |
+| request body | 89,003 bytes |
+| `options` | `endpointOverwriteBehavior=AUTO_MERGE`, `schemaOverwriteBehavior=AUTO_MERGE`, `deleteUnmatchedResources=false`, `prependBasePath=false`, `updateFolderOfChangedEndpoint=false` |
+| mock response | `HTTP 200` `{"success": true, "data": {"mock": true}}` |
+| process exit | `0` |
+
+Pre-flight validation printed before the POST: `openapi 3.1.0`, 17 paths, 17 operations,
+13 schemas, 44 local `$ref`s, 7 tags, all 17 `operationId`s (`phanthyModelsGet` and
+`modelStatsGet` present).
+
+## What this does and does not prove
+
+- **Proves:** the request shape Apifox documents (string `input`, merge options, bearer header,
+  API-version header), the token-handling rule (env only), the `200 → exit 0` path, and the
+  pre-flight validation output. The failure paths were **not** exercised: the mock only ever
+  returns `200`.
+- **Does not prove:** that the real Apifox tenant accepts the spec, what merge conflicts the real
+  project produces, or that the real import returns 2xx. Those need `APIFOX_ACCESS_TOKEN` +
+  `APIFOX_PROJECT_ID` (tracked as B1 in `docs/04-todos.md`).

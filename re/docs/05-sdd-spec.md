@@ -15,6 +15,9 @@ The upstream PhanthyCode API speaks the Anthropic Messages protocol, which is in
 - Users who authenticate via the web OAuth PKCE flow end up with long-lived credentials that can expire, requiring manual refresh.
 - A single account can quickly exhaust its credit, hit rate limits, or expire, causing cascading failures.
 - The upstream `/v1/messages` endpoint does not exist as a public OpenAI-compatible endpoint with model listing or health probes.
+- Model discovery does exist upstream but is credential-gated: `GET /api/phanthy_code/models` and
+  `GET /api/phanthy_code/models/stats` (`EP-16` / `EP-17`, added by M6) answer `401 missing_login` anonymously
+  (`M6-new-endpoint-probes.txt:60-140`), and no anonymous listing or health probe exists anywhere on the origin.
 
 This gateway solves all of these locally, inside a single zero-dependency Go binary.
 
@@ -75,7 +78,7 @@ This gateway solves all of these locally, inside a single zero-dependency Go bin
 | OAuth token refresh | yes | proactive + scheduled keepalive |
 | SSE translation (Anthropic → OpenAI) | yes | line-by-line pass-through + conversion |
 | Per-request account rotation (up to 3 attempts) | yes | `handler.go:133` |
-| `/v1/models` on the upstream itself | no | verified 404 (HTML shell), proxy serves its own static list |
+| `/v1/models` on the upstream itself | no | verified 404 (HTML shell); proxy serves its own static list. M6 refinement: the upstream catalogue lives at `/api/phanthy_code/models` behind a bearer guard (`EP-16`), still out of scope for this gateway |
 | Upstream `/api/web/events` semantics | no | existence-only, no client code uses it |
 
 ---
@@ -174,7 +177,20 @@ login → (imports no internal packages outside stdlib net/http)
 | `/oauth/token` | POST | none (form) | code exchange / refresh token grant | `internal/upstream/client.go:232-259` |
 | `/api/oauth/phanthy_cli/create_api_key` | POST | Bearer access_token | mint API key (PRIOR-ART, upstream returns 404) | `internal/upstream/client.go:262-308` |
 | `/api/oauth/profile` | GET | Bearer access_token | fetch account profile (declared, no production call site) | `internal/upstream/client.go:369-394` |
-| `/v1/messages` | POST | `x-api-key` (preferred) or `Authorization: Bearer` (fallback) | Anthropic Messages inference (SSE stream) | `internal/upstream/client.go:331-367` |
+| `/v1/messages` | POST | `x-api-key` (preferred by prior art) or `Authorization: Bearer` (prior-art fallback) | Anthropic Messages inference (SSE stream) | `internal/upstream/client.go:331-367` |
+| `/api/phanthy_code/models` | GET | Bearer access_token | model catalogue (`EP-16`); declared by the official CLI, **not implemented** by this gateway | `M6-cli-config.txt:74-99`; `M6-new-endpoint-probes.txt:25-105` |
+| `/api/phanthy_code/models/stats` | GET | Bearer access_token | per-model usage/statistics (`EP-17`); declared by the official CLI, **not implemented** by this gateway | `M6-cli-config.txt:74-99`; `M6-new-endpoint-probes.txt:110-190` |
+
+Rows 1–4 are the prior-art Go call set (`internal/upstream/client.go`). Rows 5–6 are declared in the **official
+CLI** bundle (`VERIFIED-STATIC`, M6) and are recorded here only so the upstream-call inventory is complete; the
+gateway does not call them and no requirement is derived from them. On both new paths the requirement is
+`Authorization: Bearer` — the anonymous challenge is `WWW-Authenticate: Bearer realm="phanthy-code"` with
+`{"error":{"code":"missing_login",…}}`.
+
+**M6 note on the `/v1/messages` credential:** the prior art prefers `x-api-key` and falls back to Bearer, but the
+official CLI deletes `x-api-key` and sends Bearer only (`M6-cli-config.txt:145-157`). The wire-level acceptance
+of either scheme on `/v1/messages` remains `BLOCKED-CRED`; FR-13's "preferred `x-api-key`" wording describes the
+existing Go implementation, not an observed server preference.
 
 ### 6.3 Auth file format (`auth_dir/phanthy-<uid>.json`)
 Three disk formats are supported by `auth.Parse` (`internal/auth/auth.go:44-149`):

@@ -1,0 +1,216 @@
+M6-cli-config.txt — Phanthy provider block, statically extracted from the official npm package
+====================================================================================================
+
+Capture: 2026-10-26T00:22Z (UTC) / 2026-10-26T08:22+08:00
+Package : @phanthy/phanthy-codeo@0.2.11 (public npm registry)
+Method  : anonymous tarball download to /tmp, tar -xzf, then byte-slicing of the extracted file with Python 3.
+           No file from the package was imported, required, installed, transpiled or executed. Strings only.
+
+File under analysis:
+  path        : package/dist/tui-worker.js  (inside the tarball)
+  bytes       : 14239742
+  sha256      : c38ca895230b827838cfebb19b2b9becdf8523379118868a0f9461956f9b0c6d
+  lines       : 5761  (the provider block sits inside one very long minified line)
+  duplicate   : package/dist/cli.js carries the same block under different minified symbol names
+                (Q_A / j26 / bsA / ok / rF1 / tiA instead of Kh / lq6 / a2A / iw / qKj / nFA;
+                values are identical). sha256(cli.js) = 61f503311058d5ec9e571db3f0a74bc3c883ea3a781b916b49619d16b8b27c52;
+                provider block at cli.js offsets 1790480..1791253.
+
+Reproduction (all commands read-only; extraction in /tmp):
+  curl -sS -o /tmp/m6/p.tgz https://registry.npmjs.org/@phanthy/phanthy-codeo/-/phanthy-codeo-0.2.11.tgz
+  sha256sum /tmp/m6/p.tgz        # 3134d33d4eba31ec0af543a8afa061d3b21c4df7259d49decc11928e2244d80c
+  mkdir -p /tmp/m6/pkg && tar -xzf /tmp/m6/p.tgz -C /tmp/m6/pkg
+  sha256sum /tmp/m6/pkg/package/dist/tui-worker.js
+  python3 - <<'PY'
+  b=open('/tmp/m6/pkg/package/dist/tui-worker.js','rb').read()
+  print(b[7928736:7929506].decode('utf-8'))    # provider block, verbatim
+  print(b[7929886:7930800].decode('utf-8'))    # credential path block, verbatim
+  PY
+
+----------------------------------------------------------------------------------------------------
+[1] PROVIDER BLOCK — byte offsets 7928736..7929506 of dist/tui-worker.js, VERBATIM
+    (no escaping applied; newlines shown as-is; the block is inside a single minified line)
+----------------------------------------------------------------------------------------------------
+
+var Kh="https://code.phanthy.com",lq6="phanthy-code-cli",a2A="phanthy",iw,qKj,nFA;var mn=jA(()=>{mn();iw={client:"x-phanthy-client",clientSource:"X-Phanthy-Client-Source",device:"x-phanthy-cli-device",product:"X-Phanthy-Product",project:"x-phanthy-project",request:"x-phanthy-request",session:"x-phanthy-session"},qKj=["org:create_api_key","user:profile","user:inference","user:sessions:claude_code","user:mcp_servers","user:file_upload"],nFA={authorize:"https://code.phanthy.com/oauth/authorize",token:"https://code.phanthy.com/oauth/token",profile:"https://code.phanthy.com/api/oauth/profile",models:"https://code.phanthy.com/api/phanthy_code/models",modelStats:"https://code.phanthy.com/api/phanthy_code/models/stats",messages:"https://code.phanthy.com/v1/messages"}}
+
+----------------------------------------------------------------------------------------------------
+[2] EXACT FIELDS (each value sliced from the source at the offset shown)
+----------------------------------------------------------------------------------------------------
+
+(i) base URL
+    symbol      : Kh
+    offset      : 7928736
+    exact string: https://code.phanthy.com
+    no trailing slash; concatenated at call sites as `${Kh}/...` (e.g. `${Kh}/api/event_logging/batch`).
+
+(ii) client id
+    symbol      : lq6
+    offset      : 7928775  (quoted string `"phanthy-code-cli"`; the enclosing symbol `lq6` starts at 7928770)
+    exact string: phanthy-code-cli
+
+(iii) provider name
+    symbol      : a2A
+    offset      : 7928793
+    exact string: phanthy
+    (also appears as the provider ID in the message path: `A.model.providerID==="phanthy"`)
+
+(iv) header-name map — FULL map, verbatim
+    symbol      : iw
+    offset      : 7928838..7929048
+    note        : mixed casing is authentic; `clientSource` and `product` values capitalise X-Phanthy,
+                  the other five use lowercase x-phanthy-. Preserve exactly as captured.
+
+    iw={client:"x-phanthy-client",clientSource:"X-Phanthy-Client-Source",device:"x-phanthy-cli-device",product:"X-Phanthy-Product",project:"x-phanthy-project",request:"x-phanthy-request",session:"x-phanthy-session"}
+
+    decoded key -> header name:
+      client        -> x-phanthy-client
+      clientSource  -> X-Phanthy-Client-Source
+      device        -> x-phanthy-cli-device
+      product       -> X-Phanthy-Product
+      project       -> x-phanthy-project
+      request       -> x-phanthy-request
+      session       -> x-phanthy-session
+
+(v) scope array — FULL array, verbatim (6 items)
+    symbol      : qKj
+    offset      : 7929050..7929173
+
+    qKj=["org:create_api_key","user:profile","user:inference","user:sessions:claude_code","user:mcp_servers","user:file_upload"]
+
+      [1] org:create_api_key
+      [2] user:profile
+      [3] user:inference
+      [4] user:sessions:claude_code
+      [5] user:mcp_servers
+      [6] user:file_upload
+
+(vi) endpoint map — FULL map, verbatim (6 entries)
+    symbol      : nFA
+    offset      : 7929175..7929506
+
+    nFA={authorize:"https://code.phanthy.com/oauth/authorize",token:"https://code.phanthy.com/oauth/token",profile:"https://code.phanthy.com/api/oauth/profile",models:"https://code.phanthy.com/api/phanthy_code/models",modelStats:"https://code.phanthy.com/api/phanthy_code/models/stats",messages:"https://code.phanthy.com/v1/messages"}}
+
+      authorize  -> https://code.phanthy.com/oauth/authorize
+      token      -> https://code.phanthy.com/oauth/token
+      profile    -> https://code.phanthy.com/api/oauth/profile
+      models     -> https://code.phanthy.com/api/phanthy_code/models
+      modelStats -> https://code.phanthy.com/api/phanthy_code/models/stats
+      messages   -> https://code.phanthy.com/v1/messages
+
+----------------------------------------------------------------------------------------------------
+[3] CREDENTIAL STORAGE — byte offsets 7929886..7930800, VERBATIM
+----------------------------------------------------------------------------------------------------
+
+import s2A from"path";var yTG,vTG,t2A,diA,Rv9,l$A=(A,j)=>new t2A({message:A,cause:j}),MRA=()=>(process.env.PHANTHY_CONFIG_DIR??s2A.join(bTG.homedir(),".phanthy-code")).normalize("NFC"),oFA=()=>s2A.join(MRA(),".credentials.json"),KR7=()=>{let A=MRA();if(kTG(s2A.join(A,".config.json")))return s2A.join(A,".config.json");if(kTG(s2A.join(A,".phanthy-code.json")))return s2A.join(A,".phanthy-code.json");return s2A.join(A,".phanthy-code.json")},ZR7=()=>`phanthy code-credentials${process.env.PHANTHY_CONFIG_DIR?`-${wv9("sha256").update(MRA()).digest("hex").slice(0,8)}`:""}`,ER7=()=>{try{return process.env.USER??bTG.userInfo().username}catch{return"claude-code-user"}},gTG=(A,j)=>{let $=M.decodeUnknownSync(M.UnknownFromJsonString)(A);if(!$||typeof $!=="object"||Array.isArray($))throw l$A(`Invalid Phanthy credentials in ${j}`);let G=$;if(G.claudeAiOauth===void 0)return{data:G,oauth:void 0};try{return{data:G,oauth:
+
+Decoded facts (all from the excerpt above):
+  config-dir resolver MRA = (process.env.PHANTHY_CONFIG_DIR ?? path.join(os.homedir(), ".phanthy-code")).normalize("NFC")
+  credential file  oFA = path.join(MRA, ".credentials.json")
+      default location pattern : ~/.phanthy-code/.credentials.json
+      env override             : PHANTHY_CONFIG_DIR (also used to salt the keychain service name
+                                 `phanthy code-credentials-<sha256(configDir)[:8]>`)
+  key name in that JSON        : claudeAiOauth
+      parsed as                   gTG(data, path); if `claudeAiOauth` is undefined the file is treated as
+                                 non-OAuth data, otherwise it is decoded as the OAuth credential schema yTG.
+      secondary config file       : $PHANTHY_CONFIG_DIR/.config.json, else .phanthy-code.json
+  os keychain fallback          : macOS `security` CLI invoked via child_process — verified in
+                                 `dist/cli.js` at offset 1792690 (`lH9("security",A,{encoding:"utf8"},…)`);
+                                 the same file contains `add-generic-password` (1793358) and
+                                 `find-generic-password` (1794461). On Linux the file path above is the
+                                 storage. (No credential value is present in the package; nothing is read
+                                 from the host in this milestone.)
+  user identity default         : process.env.USER ?? os.userInfo().username, else "claude-code-user"
+
+----------------------------------------------------------------------------------------------------
+[4] OTHER code.phanthy.com ENDPOINTS FOUND IN THE PACKAGE
+----------------------------------------------------------------------------------------------------
+
+These are ADDITIONAL to the 6-entry endpoint map above. File + offset + context are given so any
+line can be re-sliced. None of these were probed in M6 (request budget); they are VERIFIED-STATIC only.
+
+4.1  POST /api/event_logging/batch   (NEW — not in the M1 endpoint inventory)
+     file   : package/dist/tui-worker.js, offset 8964451 (same block also at cli.js offset 1825141)
+     built as `${Kh}/api/event_logging/batch`; method POST; JSON body {events:[...]} with a batch cap
+     (`T=$.slice(0,r24)`). Headers sent: Content-Type: application/json,
+     Authorization: Bearer <access token>, User-Agent: phanthy-codeo/<version>,
+     x-service-name: phanthy-codeo, x-phanthy-product: phanthy_codeo, X-Phanthy-Client-Source: phanthy-codeo.
+     Context:
+       ,E=_.fn("PhanthyTelemetry.flush")(function*(){if(!IA1()||q)return;q=!0,yield*_.ensuring(Q.withPermit(_.gen(function*(){yield*_.promise(N);let R=yield*A.token().pipe(_.orElseSucceed(()=>N7.none()));if(N7.isNone(R)||$.length===0)return;let T=$.slice(0,r24);if(!(yield*_.tryPromise({try:()=>fetch(`${Kh}/api/event_logging/batch`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${R.value}`,"User-Agent":`phanthy-codeo/${C9}`,"x-service-name":"phanthy-codeo",[iw.product]:"phanthy_codeo",[iw.clientSource]:"phanthy-codeo"},body:JSON.
+
+4.2  Phanthy web-search base URL = https://code.phanthy.com
+     file   : package/dist/tui-worker.js, offset 7829349
+     It is the baseURL of the `PhanthyWebSearchConfig` service; the token resolver fails closed with
+     "Phanthy web search authentication is not configured." when no token is supplied.
+     Context:
+       M.String)).annotate({description:"Exclude results from these domains"})});p2A=class p2A extends r6.Service()("@opencode/v2/WebSearchConfig"){};mRG=Y6.succeed(p2A,p2A.of({baseURL:"https://code.phanthy.com",token:()=>_.fail(new u4({message:"Phanthy web search authentication is not configured."}))})),uRG=Q8({service:p2A,layer:mRG,deps:[]}),PS9=M.Struct({query:M.String,results:M.Array(M.Union([M.String,M.Struct({tool_use_id:M.Stri
+
+4.3  POST https://code.phanthy.com/v1/messages  (in the map; listed for completeness)
+     The `messages` key of the endpoint map is NEVER dereferenced (`nFA.messages` occurs 0 times).
+     The live message path goes through the Phanthy provider definition at tui-worker.js offset 13969570:
+     `phanthy: ... {apiKey:"phanthy-oauth", baseURL:`${Kh}/v1`, fetch: ...}` — an Anthropic-SDK
+     compatible provider whose custom fetch (a) DELETES `x-api-key`, (b) SETS
+     `Authorization: Bearer <access token>`, (c) SETS `x-phanthy-product: phanthy_code` and
+     `X-Phanthy-Client-Source: cli`, (d) SETS `User-Agent: <provider name>/<version>`, and
+     (e) regenerates `x-phanthy-request` to a fresh UUID, recording the old value.
+     STATIC INCONSISTENCY, NOT RESOLVED: baseURL is `${Kh}/v1` while the bundled Anthropic SDK posts
+     to the absolute path `/v1/messages`, so the effective URL could be /v1/messages or /v1/v1/messages.
+     Only the string-level fact is recorded here; M1 proved /v1/messages exists and M6 did not POST.
+     Context:
+       ction Nu4(A){return{phanthy:_.fnUntraced(function*(j){return{autoload:!0,options:{apiKey:"phanthy-oauth",baseURL:`${Kh}/v1`,fetch:async($,G)=>{let q=await _.runPromise(A.token());if(N7.isNone(q))throw Error("Phanthy authentication is required");let F=new Headers(G?.headers);F.delete("x-api-key"),F.set("Authorization",`Bearer ${q.value}`),F.set(iw.product,"phanthy_code"),F.set(iw.clientSource,"cli"),F.set("User-Agent",`${RU.name}/${C9}`);let X=F.get(iw.request),Q=crypto.randomUUID();if(X)F.set(iw.request,Q),fc.record(X,new Headers,Q);let O=await fetch($,{...G,headers:F});if(X)fc.record(X,O.headers,Q);return O}}}}),anthropic:()=>_.succeed({autoload:!1,options:{headers:{"anthropic-beta":"interleaved-thin
+
+4.4  Sibling hosts and pages (not API paths, recorded for scope completeness)
+     https://code.phanthy.com/console      — cli.js offset 21814641 (FP console URL / login help text)
+     https://dev.code.phanthy.com         — cli.js offset 19085552; selected by a build/runtime flag:
+       e==="issue_comment"||X.eventName==="issues"?c.issue.number:c.pull_request.number,_A=`/${S}/${P}/actions/runs/${L}`,FA=D?"https://dev.code.phanthy.com":"https://code.phanthy.com",AA,uA,TA,qA,MA,pA,PA=0
+     https://code.phanthy.com/ (as HTTP-Referer / X-Title client metadata) — injected into the autoload
+     options of third-party providers (llmgateway, openrouter, nvidia, vercel, zenmux, gitlab, kilo,
+     snowflake-cortex): tui-worker.js offsets 13974054, 13974201, 13974343, 13974508, 13976233, 13981386.
+     This is client-side branding on OTHER vendors' APIs, not a Phanthy API call.
+
+4.5  HOW THE TWO NEW ENDPOINTS ARE CALLED (static call sites — explains the observed 401)
+     GET nFA.models      — tui-worker.js offset 8960290
+       headers: { Authorization: `Bearer <token>`, User-Agent: `phanthy-codeo/<version>`,
+                  x-phanthy-product: phanthy_code }
+       No `x-api-key`, no `Accept`. If no local token exists the call is skipped (`none`).
+       Context:
+         $))return N7.none();let G=yield*_.tryPromise({try:()=>fetch(nFA.models,{headers:{Authorization:`Bearer ${$.value}`,"User-Agent":`phanthy-codeo/${C9}`,[iw.product]:"phanthy_code"}}),catch:(Q)=>new A56({message:"Failed to load the Phanthy model catalog",cause:Q})}).pipe(_.option);if(N7.isNone(G)||!G.value.ok)return N7.none();let q=yield*_.tryPromise({try:()=>G.value.json(),catch:(Q)=>new A
+
+     GET nFA.modelStats   — tui-worker.js offset 14022224
+       headers: { Authorization: `Bearer <token>`, Accept: application/json,
+                  User-Agent: `phanthy-codeo/<version>`, x-phanthy-product: phanthy_code }
+       plus an AbortSignal; the URL is overridable (`A.url ?? nFA.modelStats`).
+       Context:
+         yPromise({try:async(G)=>{let q=await(A.fetch??fetch)(A.url??nFA.modelStats,{headers:{Authorization:`Bearer ${j.value}`,Accept:"application/json","User-Agent":`phanthy-codeo/${C9}`,[iw.product]:"phanthy_code"},signal:AbortSignal.any([G,AbortSignal.timeout(5000)])});return q.ok?q.json():void 0},catch:()=>{return}}).pipe(_.catch(()=>_.succeed(void 0)));if($===void 0)return N7.none();return 
+
+     Both call sites send `Authorization: Bearer` and nothing that an unauthenticated caller could
+     fabricate, which is consistent with the anonymous 401 observed in M6-new-endpoint-probes.txt.
+
+----------------------------------------------------------------------------------------------------
+[5] HOW THE HEADER FAMILY IS APPLIED (context for the 'new header family' finding)
+----------------------------------------------------------------------------------------------------
+
+5.1  On the Phanthy provider path (tui-worker.js offset 9379826) the request headers object is built as:
+       t:"",title:"",metadata:{}})});let H=A.model.providerID==="phanthy"?(yield*e7.context).project.id:void 0;return{system:$,messages:Q,tools:Object.fromEntries(Object.entries(V).toSorted(([E],[w])=>E.localeCompare(w))),params:O,messageTransformOptions:X,headers:{...A.model.providerID==="phanthy"?{...H?{[iw.project]:H}:{},[iw.session]:A.sessionID,[iw.request]:A.user.id,[iw.client]:A.flags.client,...e2A.headers(),"User-Agent":l81}:{"x-session-affinity":A.sessionID,"X-Session-Id":A.sessionID,"User-Agent":l81},...A.parentSessionID?{"x-parent-session-id":A.parentSessionID}:{},...A.model.headers,...N}}})});var Xy={};xj(Xy,{use:()=>qD4,node:()=>XD4,hasToolCalls:()=>FD4,Service:()=>OrA,OUTPUT_TOKEN_MAX:
+     i.e. x-phanthy-project, x-phanthy-session, x-phanthy-request, x-phanthy-client, plus ov9() and
+     a User-Agent. Every one is namespaced; `x-api-key` is not used on this path.
+
+5.2  `ov9()` is the device header factory: ov9() => {[iw.device]: base64url(JSON.stringify(fTG()))}
+     (tui-worker.js offset 7938033). fTG() collects hostname, username, platform, arch, osRelease,
+     IPv4 ipCandidates (max 32), network interfaces and default routes (max 32) — i.e. the
+     `x-phanthy-cli-device` header carries a base64url-encoded host fingerprint. Recorded as a
+     privacy/telemetry observation, not as a vulnerability claim.
+     Context:
+       g(),cliVersion:C9,hostname:vv9(),username:dv9(),platform:rq6(),arch:yv9(),osRelease:hv9(),ipCandidates:G,networkInterfaces:j.filter((q)=>q.family==="IPv4"||q.family==="4").toSorted((q,F)=>Number(q.internal)-Number(F.internal)).slice(0,mv9),routes:A.filter((q)=>q.startsWith("default")||oq6(q).length>0).slice(0,uv9),defaultGateway:$}}function mTG(){return Buffer.from(JSON.stringify(fTG()),"utf8").toString("base64url")}function ov9(){return{[iw.device]:mTG()}}var mv9=32,uv9=32,c
+
+----------------------------------------------------------------------------------------------------
+[6] NEGATIVE CHECKS (static, same file)
+----------------------------------------------------------------------------------------------------
+
+  - No credential, token, cookie, password or private key literal was found in the extracted block;
+    the only credential-adjacent strings are file paths and the `claudeAiOauth` key name.
+  - `phanthy-code-cli` appears exactly once in dist/tui-worker.js (offset 7928775); it is the client id
+    string, not a header value. Header VALUES seen elsewhere are phanthy_code / phanthy_codeo / cli.
+  - The 6 scopes are a client-side request list. The server's OIDC document (M1) advertises only 5;
+    `org:create_api_key` is requested by the CLI but NOT advertised server-side (see M6-index.md).
+
