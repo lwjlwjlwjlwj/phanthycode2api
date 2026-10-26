@@ -1,77 +1,62 @@
-// Package protocol OpenAII 兼容层的薄封装。
+// Package protocol OpenAI 兼容层的薄封装。
 //
 // 协议转换（OpenAI Chat ↔ Anthropic Messages）与 SSE 事件状态机不再自研，
 // 改由 new-api 开源的 relaykit（github.com/QuantumNous/new-api/relaykit）承载，
 // token 估算由 tokenkit（github.com/QuantumNous/new-api/tokenkit）承载。
 // 本包仅保留逆向证据特有的、relaykit 不提供的能力：
-//   - 客户端模型别名 → 上游模型 ID（ModelAliases / UpstreamModel / ModelList）
+//   - /v1/models 展示列表（Layer A，PUBLIC-MARKETING 等级，见 M6-public-model-catalog.txt）
 //   - max_tokens 合法性改写（≤0 或 >65536 → 8192，证据 02-usage-semantics.md §2）
 //   - 图片块降级为字面量 "[image]"
 //   - SSE 帧的读写（relaykit 明确由宿主完成）
+//
+// 模型名处理遵循证据 02-usage-semantics.md §6.3：两种词汇都应作为透传名接受，
+// 请求中的 model 原样透传，不做别名映射、不设 allow-list。旧版携带的
+// 13 条 客户端→上游ID 映射属于 Layer B（PRIOR-ART / unverified live，
+// §6.2），来源是不可信的仓库代码，本重写已按"完全重写、不参考旧版"原则删除。
 package protocol
 
 import "encoding/json"
 
-// 客户端模型别名 → 上游模型 ID。
-// 该映射来自逆向报告 Layer B（PRIOR-ART / 未在线验证），未知名称原样透传。
-var ModelAliases = map[string]string{
-	"DeepSeek-V4":       "Iris-1.0",
-	"gpt-5.6-sol":       "Zeus-1.1-pro",
-	"gpt-5.6-terra":     "Zeus-1.1",
-	"gpt-5.6-luna":      "Zeus-1.1-fast",
-	"gpt-5.5":           "Zeus-1.0-pro",
-	"Claude Opus 4.8":   "Gaia-1.2",
-	"Claude Opus 4.7":   "Gaia-1.1",
-	"Claude Sonnet 4.6": "Gaia-1.0",
-	"Kimi K3":           "Apollo-2.0",
-	"Kimi-k2.7-code":    "Apollo-1.1",
-	"Kimi K2.6":         "Apollo-1.0",
-	"GLM 5.2":           "Metis-1.1",
-	"GLM-5.1":           "Metis-1.0",
-}
-
-// UpstreamModel 把客户端模型名映射为上游 ID；未知名称原样返回。
-func UpstreamModel(name string) string {
-	if v, ok := ModelAliases[name]; ok {
-		return v
-	}
-	return name
-}
-
 // ModelEntry 是 /v1/models 返回的单个模型。
+// 只声明有证据的字段：上下文窗口（200k）来自旧版静态列表且无上游证据
+// （§6.4：No upstream evidence），因此不再声明 context_length。
 type ModelEntry struct {
-	ID            string `json:"id"`
-	Object        string `json:"object"`
-	Created       int64  `json:"created"`
-	OwnedBy       string `json:"owned_by"`
-	ContextLength int    `json:"context_length"`
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
 }
 
-// ModelList 返回 13 个客户端模型别名（顺序稳定）。
+// ModelList 返回模型展示列表。
+//
+// 名单逐字取自公开定价页 /token-plan 的"可用模型列表"（PUBLIC-MARKETING 等级，
+// re/evidence/M6-public-model-catalog.txt:27-43，sha256 已校验）。这些是营销
+// 展示名而非 wire 模型 ID（§6.1：not published：model id / API slug），仅供
+// /v1/models 向客户端展示；任意模型名请求都会原样透传（§6.3），本表既不是
+// allow-list，也不参与任何名称映射。
 func ModelList() []ModelEntry {
 	ids := []string{
-		"DeepSeek-V4",
-		"gpt-5.6-sol",
-		"gpt-5.6-terra",
-		"gpt-5.6-luna",
-		"gpt-5.5",
-		"Claude Opus 4.8",
-		"Claude Opus 4.7",
-		"Claude Sonnet 4.6",
-		"Kimi K3",
-		"Kimi-k2.7-code",
-		"Kimi K2.6",
-		"GLM 5.2",
-		"GLM-5.1",
+		"Phanthy-fast",
+		"Phanthy-pro",
+		"Phanthy-ultra",
+		"glm-5.3-flash",
+		"glm-5.3",
+		"glm-5.2",
+		"kimi-k3",
+		"kimi-k2.7-code",
+		"deepseek-v4.1-flash-1017",
+		"Phana-5.5o",
+		"Phana-5.5s",
+		"Phano-6a",
+		"Phano-6.1s",
 	}
 	out := make([]ModelEntry, 0, len(ids))
 	for _, id := range ids {
 		out = append(out, ModelEntry{
-			ID:            id,
-			Object:        "model",
-			Created:       0,
-			OwnedBy:       "phanthy",
-			ContextLength: 200000,
+			ID:      id,
+			Object:  "model",
+			Created: 0,
+			OwnedBy: "phanthy",
 		})
 	}
 	return out

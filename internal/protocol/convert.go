@@ -26,8 +26,10 @@ var errEmptyRequest = errors.New("请求为空")
 // 逆向证据特有、relaykit 不处理的事：
 //   - max_tokens / max_completion_tokens 合法性改写（≤0 或 >65536 → 8192）
 //   - 图片块降级为字面量 "[image]"
-//   - 强制 model 别名映射与 stream=true
+//   - 强制 stream=true
 //
+// 模型名按证据 §6.3 原样透传（不做别名映射）：
+// relaykit 默认取 textRequest.Model，这里再显式 SetModelName 一次以保持语义清晰。
 // 上游始终以 stream=true 调用，非流式响应由本地聚合产生。
 func BuildAnthropicRequest(ctx context.Context, req *ChatRequest) ([]byte, error) {
 	if req == nil {
@@ -50,7 +52,7 @@ func BuildAnthropicRequest(ctx context.Context, req *ChatRequest) ([]byte, error
 
 	meta := &convmeta.Values{
 		OriginModelName:   req.Model,
-		UpstreamModelName: UpstreamModel(req.Model),
+		UpstreamModelName: req.Model,
 		IsStream:          true,
 		Options: &convmeta.Options{
 			Claude: convmeta.ClaudeOptions{
@@ -66,8 +68,9 @@ func BuildAnthropicRequest(ctx context.Context, req *ChatRequest) ([]byte, error
 		return nil, err
 	}
 
-	// 强制别名映射与 stream=true（自研行为保留，relaykit 默认透传 model、按 IsStream 设 stream）。
-	claudeReq.SetModelName(UpstreamModel(req.Model))
+	// 模型名原样透传（relaykit 默认即透传 textRequest.Model，这里保持显式），
+	// 并强制 stream=true（relaykit 按 IsStream 设 stream，这里无条件置真）。
+	claudeReq.SetModelName(req.Model)
 	stream := true
 	claudeReq.Stream = &stream
 
@@ -130,7 +133,7 @@ func degradeMedia(req *dto.GeneralOpenAIRequest) {
 }
 
 // EstimateRequestTokens 用 tokenkit 估算请求的 prompt token 数。
-// 仅在用 stock 缺失（usage 全为 0）时作为 prompt 侧兜底，对齐 new-api 的
+// 仅在 usage 缺失（全为 0）时作为 prompt 侧兜底，对齐 new-api 的
 // ResponseText2Usage：prompt 用宿主估算值、completion 用 tokenkit.Estimate、total 求和。
 func EstimateRequestTokens(model string, req *ChatRequest) int {
 	var b strings.Builder
@@ -147,7 +150,7 @@ func EstimateRequestTokens(model string, req *ChatRequest) int {
 	if b.Len() == 0 {
 		return 0
 	}
-	return tokenkit.Estimate(UpstreamModel(model), b.String())
+	return tokenkit.Estimate(model, b.String())
 }
 
 // messageText 提取字符串或内容块数组中的纯文本（含 "[]image]" 占位）。
