@@ -1,82 +1,94 @@
 # phanthycode2api
 
-> 将 PhanthyCode CLI 的 Anthropic Messages API 转换为 OpenAI 兼容 API，Go 实现。
+> 把 PhanthyCode 的 Anthropic Messages API 转换成 OpenAI 兼容 API 的 Go 网关。
 
-多账号池管理 + 冷却与错误处理 + OpenAI ↔ Anthropic 协议转换，把 PhanthyCode 上游封装成
-任意 OpenAI 兼容客户端（NextChat、ChatBox、OpenCat 等）可直接接入的标准接口。
+本项目**完全依据 `re/` 下的逆向证据重写**，不参考任何第三方同名实现：
+
+- `re/evidence/M6-cli-config.txt` — 官方 CLI `@phanthy/phanthy-codeo@0.2.11` 的静态提取
+  （请求头族、设备指纹字段、6 个 scope、端点映射、`/v1/messages` 上的 Bearer 语义）
+- `re/evidence/M6-new-endpoint-probes.txt` — `/api/phanthy_code/models`、`/models/stats` 的匿名探测
+- `re/docs/02-usage-semantics.md` — 请求字段、SSE 事件序列、错误分类优先级
+- `re/docs/05-sdd-spec.md` — 功能需求（FR-01…FR-17）与接口契约
+
+未验证的字段（成功响应 schema 等）在代码中一律按“防御性解析”处理，并在注释里标注证据出处。
 
 ## 功能特性
 
-- 🔑 **可选鉴权** — 配置 `api_key` 后需 Bearer token 访问（空则无鉴权，便于本地调试）
-- 🔄 **OpenAI 兼容** — 无痛接入任何支持 OpenAI 格式的客户端（NextChat、ChatBox、OpenCat 等）
-- 👥 **多账号池管理** — LRU 轮转调度（最近未用优先）、余额感知选择、错误计数阈值冷却、禁用、持久化状态
-- 🖐 **官方指纹对齐** — 按逆向证据发送官方 CLI 的 7 个 `x-phanthy-*` 请求头（含 base64url 设备指纹），/v1/messages 优先 Bearer 鉴权
-- 💰 **余额探测** — 可选周期调用 `/api/phanthy_code/models/stats`，防御性解析余额并影响选号
-- 🔁 **协议转换** — OpenAI 请求/响应 ↔ Anthropic Messages API 双向转换，流式 SSE 实时透传
-- 🔓 **OAuth 登录** — 半自动 PKCE 授权码流程（6 scopes 对齐官方 CLI），一键获取凭证
-- ⏰ **定时 keepalive** — 保持 token 活跃，接近过期时自动刷新
-- 🗺 **模型映射** — 客户端使用商业名（DeepSeek-V4、gpt-5.6-sol 等），自动映射到上游真实模型
-- 🏗 **Go 单二进制** — 无第三方依赖，`go build` 即得
+- **OpenAI 兼容入口** — `/v1/chat/completions`（流式 / 非流式）、`/v1/models`、`/status`、`/healthz`
+- **官方指纹对齐** — 按 M6 证据注入 7 个 `x-phanthy-*` 请求头（含 `base64url(JSON)` 设备指纹与每请求刷新 UUID）。
+  本项目没有真实会话 / 项目概念，因此 `x-phanthy-session` 取账号 UID，`x-phanthy-project` 默认省略
+  （证据中该头也是条件注入）。
+- **Bearer 优先** — `/v1/messages` 优先 `Authorization: Bearer <access_token>`，无 access token 时退回 `x-api-key`
+- **账号池调度** — LRU（最近未用优先）+ 余额感知 + 冷却 / 禁用 / 连续错误阈值，状态持久化
+- **单收集器 SSE** — 流式与非流式共用同一个事件状态机；上游 `error` 事件不再被丢弃，空流不会被伪造成成功
+- **OAuth 登录** — PKCE（S256）+ 官方 CLI 的 6 个 scope + 随机 `state` 校验
+- **定时 keepalive** — 启动即执行一次，之后按配置小时刷新即将过期的 token；可选周期余额探测
+- **零第三方依赖** — 仅标准库，`go build` 即得单二进制
+
+## 目录结构
+
+```
+cmd/
+  server/main.go      # 入口：配置 → 凭证 → 账号池 → 上游客户端 → 网关 → keepalive
+  login/main.go       # PKCE 半自动登录（-step=url / -step=exchange）
+internal/
+  config/             # JSON 配置 + P2A_* 环境变量覆盖 + 校验
+  credential/         # 4 种磁盘凭证格式解析 + 原子写（tmp + rename）
+  pool/               # 账号池：LRU、余额降级、冷却、禁用、状态持久化
+  phanthy/            # 上游客户端、7 个指纹头、错误分类、余额提取
+  protocol/           # OpenAI ↔ Anthropic 请求转换 + 单一 SSE 收集器
+  gateway/            # 路由、鉴权、轮转、流式/非流式转发
+  keepalive/          # token 保活与余额探测
+```
 
 ## 快速开始
 
-### 1. 构建 & 配置
+要求 Go ≥ 1.26.5，无第三方依赖。
 
 ```bash
-git clone https://github.com/lwjlwjlwjlwj/phanthycode2api.git
-cd phanthycode2api
 go build -o phanthycode2api ./cmd/server
 cp config.example.json config.json
-# 编辑 config.json，设置 api_key（可留空 = 不鉴权）
+# 编辑 config.json：设置 api_key（留空 = 不鉴权）
 ```
 
-### 2. 登录获取凭证
+### 1. 登录获取凭证
 
 ```bash
-go run ./cmd/login
+go run ./cmd/login -step=url
 ```
 
-浏览器打开授权链接 → 登录 PhanthyCode 账号 → 授权后粘贴 code 到终端，凭证自动保存到 `auths/` 目录。
+在浏览器打开输出的授权链接，完成登录后从回调地址复制 `code` 与 `state`：
 
-### 3. 启动服务
+```bash
+go run ./cmd/login -step=exchange -code=<code> -state=<state>
+```
+
+凭证以 `auths/phanthy-<uid>.json` 落盘（权限 0600）。也可以用 `./login.sh` 交互式完成两步。
+
+### 2. 启动服务
 
 ```bash
 ./phanthycode2api -config config.json
+# 或纯环境变量
+P2A_LISTEN=:7864 P2A_API_KEY=your-secret ./phanthycode2api
 ```
 
-或直接用环境变量（无需配置文件）：
+### 3. 验证
 
 ```bash
-P2A_LISTEN=:7864 P2A_API_KEY=your-secret-key ./phanthycode2api
-```
-
-默认监听 `:7864`，可通过 `P2A_LISTEN` 环境变量覆盖。
-
-### 4. 验证
-
-```bash
-# 健康检查（无需鉴权）
 curl -s http://localhost:7864/healthz
 
-# 模型列表
-curl -s http://localhost:7864/v1/models \
-  -H "Authorization: Bearer your-secret-key"
+curl -s http://localhost:7864/v1/models -H "Authorization: Bearer your-secret"
 
-# 聊天（非流式）
 curl -s http://localhost:7864/v1/chat/completions \
-  -H "Authorization: Bearer your-secret-key" \
+  -H "Authorization: Bearer your-secret" \
   -H "Content-Type: application/json" \
   -d '{"model":"DeepSeek-V4","messages":[{"role":"user","content":"你好"}]}'
 
-# 聊天（流式）
 curl -N http://localhost:7864/v1/chat/completions \
-  -H "Authorization: Bearer your-secret-key" \
+  -H "Authorization: Bearer your-secret" \
   -H "Content-Type: application/json" \
   -d '{"model":"DeepSeek-V4","stream":true,"messages":[{"role":"user","content":"数到3"}]}'
-
-# 账号池状态
-curl -s http://localhost:7864/status \
-  -H "Authorization: Bearer your-secret-key"
 ```
 
 ## 配置说明
@@ -84,7 +96,7 @@ curl -s http://localhost:7864/status \
 ```json
 {
   "listen": ":7864",
-  "api_key": "***",
+  "api_key": "",
   "auth_dir": "./auths",
   "state_file": "./data/state.json",
   "base_url": "https://code.phanthy.com",
@@ -95,7 +107,17 @@ curl -s http://localhost:7864/status \
     "err_cooldown": "10m"
   },
   "schedule": {
-    "keepalive_hours": [22]
+    "keepalive_hours": [22],
+    "probe_interval": "0"
+  },
+  "fingerprint": {
+    "enabled": true,
+    "cli_version": "0.2.11",
+    "client": "cli",
+    "client_source": "cli",
+    "product": "phanthy_code",
+    "user_agent": "",
+    "device_json": ""
   },
   "upstream": {
     "timeout_seconds": 120
@@ -106,18 +128,28 @@ curl -s http://localhost:7864/status \
 | 配置项 | 环境变量 | 默认值 | 说明 |
 |---|---|---|---|
 | `listen` | `P2A_LISTEN` | `:7864` | 监听地址 |
-| `api_key` | `P2A_API_KEY` | `""` | 服务端 API 密钥（空则无鉴权） |
-| `auth_dir` | `P2A_AUTH_DIR` | `./auths` | 账号凭证目录 |
-| `state_file` | `P2A_STATE_FILE` | `./data/state.json` | 账号状态持久化路径 |
-| `base_url` | `P2A_BASE_URL` | `https://code.phanthy.com` | 上游 API 地址 |
-| `cooldown.hard_credit` | `P2A_HARD_CREDIT` | `12h` | 积分不足冷却时长 |
-| `cooldown.soft_rate` | `P2A_SOFT_RATE` | `60s` | 限流冷却时长 |
+| `api_key` | `P2A_API_KEY` | `""` | 非空时对 `/v1/*`、`/status` 启用 Bearer 鉴权 |
+| `auth_dir` | `P2A_AUTH_DIR` | `./auths` | 凭证目录 |
+| `state_file` | `P2A_STATE_FILE` | `./data/state.json` | 账号池状态文件 |
+| `base_url` | `P2A_BASE_URL` | `https://code.phanthy.com` | 上游地址 |
+| `cooldown.hard_credit` | `P2A_HARD_CREDIT` | `12h` | 积分不足冷却 |
+| `cooldown.soft_rate` | `P2A_SOFT_RATE` | `60s` | 限流 / 404 冷却 |
 | `cooldown.err_threshold` | `P2A_ERR_THRESHOLD` | `3` | 连续错误阈值 |
-| `cooldown.err_cooldown` | `P2A_ERR_COOLDOWN` | `10m` | 错误冷却时长 |
-| `schedule.keepalive_hours` | — | `[22]` | 定时 keepalive 小时 |
-| `upstream.timeout_seconds` | `P2A_TIMEOUT_SECONDS` | `120` | 上游请求超时 |
+| `cooldown.err_cooldown` | `P2A_ERR_COOLDOWN` | `10m` | 达到阈值后的冷却 |
+| `schedule.keepalive_hours` | `P2A_KEEPALIVE_HOURS` | `[22]` | 每日 keepalive 小时，逗号分隔（如 `3,9,22`） |
+| `schedule.probe_interval` | `P2A_PROBE_INTERVAL` | `0` | 余额探测周期，`0` 关闭 |
+| `fingerprint.enabled` | `P2A_FP_ENABLED` | `true` | 是否注入官方指纹头 |
+| `fingerprint.cli_version` | `P2A_FP_CLI_VERSION` | `0.2.11` | 指纹里的 CLI 版本 |
+| `fingerprint.client` | `P2A_FP_CLIENT` | `cli` | `x-phanthy-client` |
+| `fingerprint.client_source` | `P2A_FP_CLIENT_SOURCE` | `cli` | `X-Phanthy-Client-Source` |
+| `fingerprint.product` | `P2A_FP_PRODUCT` | `phanthy_code` | `X-Phanthy-Product` |
+| `fingerprint.user_agent` | `P2A_FP_USER_AGENT` | `phanthy-codeo/<cli_version>` | `User-Agent` |
+| `fingerprint.device_json` | `P2A_FP_DEVICE_JSON` | `""` | 自定义设备指纹 JSON；留空则自动采集 |
+| `upstream.timeout_seconds` | `P2A_TIMEOUT_SECONDS` | `120` | 上游超时 |
 
-### 可用模型
+## 模型别名
+
+客户端可用下列商业名，网关会映射到上游真实模型；未知名称原样透传。
 
 | 客户端名 | 上游模型 |
 |---|---|
@@ -139,118 +171,89 @@ curl -s http://localhost:7864/status \
 
 ### `POST /v1/chat/completions`
 
-OpenAI 兼容。支持 `stream`（SSE）、`max_tokens`、`temperature`、`top_p`。
+OpenAI 兼容。支持 `stream`、`max_tokens` / `max_completion_tokens`、`temperature`、`top_p`、
+`stop`、`tools`、`tool_choice`、`user`。图片内容块会被降级为字面量 `[image]`。
+
+上游始终以 `stream: true` 调用：
+- 非流式请求在本地聚合完整 SSE 后返回 `chat.completion`；
+- 流式请求逐帧转换为 `chat.completion.chunk`，以唯一的 `data: [DONE]` 结束。
 
 ### `GET /v1/models`
 
-返回配置的模型列表。
+返回 13 个客户端模型别名（`object: "list"`）。
 
 ### `GET /status`
 
-账号池状态概览（每个账号的 UID、状态、冷却、错误计数）。
+返回账号池快照（`accounts` 数组）：`uid`、`nickname`、`has_api_key`、`cooling`、`until`、
+`reason`、`disabled`、`err_count`、`balance`、`last_used`。排序固定按 UID。
 
 ### `GET /healthz`
 
-健康检查（无需鉴权）。
+无鉴权健康检查，返回纯文本 `ok`。
 
-## 鉴权机制
+## 鉴权与错误语义
 
-启用方式：在 `config.json` 设置 `api_key`（或环境变量 `P2A_API_KEY`），服务端即开启 Bearer 鉴权。
+配置 `api_key` 后，受保护端点必须携带完全匹配的 `Authorization: Bearer <api_key>`，否则返回
+`401 {"error":{"code":"invalid_api_key",...}}`；`api_key` 为空时不做任何鉴权。
 
-- 受保护端点（`/v1/chat/completions`、`/v1/models`、`/status`）需携带请求头：
-  ```
-  Authorization: Bearer <your_api_key>
-  ```
-- 缺失或错误的 token → `401 {"error":{"code":"invalid_api_key",...}}`
-- `/healthz` **不**参与鉴权（方便健康检查与容器探针）
-- `api_key` 留空（默认）→ 不鉴权，任意请求可直接访问（适合本地开发 / 内网部署）
+上游错误按固定优先级分类（`internal/phanthy/errors.go`）：
 
-鉴权在 `internal/server/handler.go` 的 `withAuth` 中间件中实现：根据配置的 `APIKey`
-统一拦截，匹配失败直接返回 401，零外部依赖。
+```
+402 → 余额/配额文案 → 登录态文案 → 401 → 429 → 404 → 5xx → 其他 4xx
+```
+
+对应的账号池动作：
+
+| 分类 | 动作 |
+|---|---|
+| 积分不足 | 冷却 `hard_credit`，余额标记为 0，换号重试 |
+| 登录态失效 | 永久禁用，直到人工重新登录 |
+| 限流 / 404 | 冷却 `soft_rate`，换号重试 |
+| 5xx / 连接失败 | 累加错误计数，达到阈值后冷却 |
+| 其他 4xx | 直接返回 400（请求本身有问题，不惩罚账号） |
+
+单个请求最多尝试 3 个账号；全部不可用时返回
+`503 {"error":{"code":"no_healthy_account",...}}`。
+
+流式响应在写出第一个 chunk 之前不会提交状态码，因此首个事件失败仍可自动换号。
+
+## 凭证格式
+
+`auth_dir/*.json` 兼容 4 种布局，写出统一为嵌套格式：
+
+1. CLI 原生：`{"type":"oauth_token","access_token":...,"expires_at":<秒>,"uid":...}`
+2. 嵌套：`{"auth":{"accessToken":...,"expiresAt":<秒>},"account":{"uid":...}}`
+3. 扁平：`{"accessToken":...,"refreshToken":...,"expiresAt":<秒或毫秒>}`
+4. 官方 CLI：`{"claudeAiOauth":{"accessToken":...,"refreshToken":...,"expiresAt":<毫秒>}}`
+
+`expiresAt` 自动识别秒 / 毫秒。凭证刷新与状态写入均使用 `临时文件 + rename`，崩溃不会留下截断 JSON。
+
+注意：加载时会跳过以 `.` 开头的文件，官方 CLI 的 `~/.phanthy-code/.credentials.json` 需重命名为
+`credentials.json` 或 `phanthy-<uid>.json` 后放入 `auth_dir`。
+
+账号池的 LRU 顺序在进程内维护；`last_used` 会随冷却 / 禁用 / 错误 / 余额等状态变化一并落盘，
+仅「成功使用」不会单独触发写盘。
 
 ## Docker 部署
 
-### 1. 构建镜像 & 启动
-
 ```bash
-# 可选：编辑 docker-compose.yml 设置 P2A_API_KEY 开启鉴权
+# 先在宿主机生成凭证到 ./auths（见上文登录步骤）
 docker compose up -d --build
 ```
 
-服务默认监听 `7864`，通过 `docker-compose.yml` 的 `ports` 映射到宿主机。
+`auths/` 与 `data/` 通过卷挂载持久化，均已加入 `.gitignore` / `.dockerignore`，切勿提交。
 
-### 2. 凭证与状态持久化
-
-账号凭证（`auths/`）与运行状态（`data/`）已通过卷挂载持久化，容器重建不会丢失。
-**注意**：这两目录含真实 token，已在 `.gitignore` / `.dockerignore` 中排除，切勿提交。
-
-首次使用仍需在宿主机生成凭证后再挂载：
+离线环境可先本地构建 `dist/phanthycode2api`，再使用 `Dockerfile.local`：
 
 ```bash
-# 宿主机本地生成凭证（go run ./cmd/login），写入 ./auths
-go run ./cmd/login
-# 凭证就绪后再 docker compose up，容器直接复用 ./auths
-```
-
-### 3. 自定义配置
-
-如需完全自定义，挂载本地 `config.json` 覆盖镜像默认的 `config.example.json`：
-
-```yaml
-# docker-compose.yml（取消注释）
-volumes:
-  - ./config.json:/app/config.json:ro
-```
-
-### 4. 验证
-
-```bash
-# 健康检查
-curl -s http://localhost:7864/healthz
-
-# 聊天（若已开启鉴权，加 -H "Authorization: Bearer <key>"）
-curl -s http://localhost:7864/v1/chat/completions \
-  -H "Authorization: Bearer your-secret-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"DeepSeek-V4","messages":[{"role":"user","content":"你好"}]}'
-```
-
-### 服务端口
-
-| 服务 | 端口 | 说明 |
-|------|------|------|
-| phanthycode2api | `7864` | OpenAI 兼容 API 入口 |
-
-> 国内网络环境：Dockerfile 使用官方 `golang:1.26-alpine` 基础镜像；若拉取缓慢，可改用国内镜像源（如阿里云 `registry.cn-hangzhou.aliyuncs.com`）或配置 Docker daemon 镜像加速。
-
-## 目录结构
-
-```
-phanthycode2api/
-├── cmd/
-│   ├── server/          # 服务入口：配置 → auth → pool → upstream → scheduler → server
-│   │   ├── main.go
-│   │   └── config.go
-│   └── login/           # 半自动 OAuth 登录工具
-│       └── main.go
-├── internal/
-│   ├── auth/            # 账号解析（三种形态）+ 原子写入
-│   ├── pool/            # 账号池状态机（冷却、禁用、错误计数阈值）
-│   ├── upstream/        # 核心：OpenAI ↔ Anthropic 协议转换 + SSE 流式转换
-│   ├── server/          # OpenAI 兼容 HTTP 服务器，带轮转与错误分类 + 鉴权中间件
-│   └── scheduler/       # 定时 keepalive 任务
-├── config.example.json  # 配置模板
-├── Dockerfile           # 多阶段构建
-├── docker-compose.yml   # 容器编排（含 healthcheck）
-├── .dockerignore
-├── .gitignore
-└── go.mod
+go build -o dist/phanthycode2api ./cmd/server
+docker build -f Dockerfile.local -t phanthycode2api:local .
 ```
 
 ## 免责声明
 
-本项目仅供学习和研究使用。请遵守 PhanthyCode 平台服务条款，自行承担使用风险。
-作者不对任何因使用本项目产生的直接或间接损失负责。
+本项目仅供学习和研究使用。请遵守 PhanthyCode 平台服务条款，控制请求频率（≤ 1 req/s），
+自行承担使用风险。作者不对任何因使用本项目产生的直接或间接损失负责。
 
 ## License
 

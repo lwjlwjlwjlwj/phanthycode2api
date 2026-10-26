@@ -17,6 +17,7 @@ services:
       P2A_AUTH_DIR: "./auths"
       P2A_STATE_FILE: "./data/state.json"
       P2A_BASE_URL: "https://code.phanthy.com"
+      # P2A_PROBE_INTERVAL: "0"           # 余额探测周期，0=关闭（如 "10m"）
     volumes:
       # 凭证与状态持久化（含真实 token，切勿提交到 git）
       - ./auths:/app/auths

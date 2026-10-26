@@ -1,8 +1,9 @@
-// Package main phanthycode2api 入口：加载配置、构建 pool、起调度器与 HTTP 服务。
+// Command server 启动 phanthycode2api 网关。
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
@@ -11,43 +12,48 @@ import (
 	"syscall"
 	"time"
 
-	"phanthycode2api/internal/auth"
-	"phanthycode2api/internal/fingerprint"
+	"phanthycode2api/internal/config"
+	"phanthycode2api/internal/credential"
+	"phanthycode2api/internal/gateway"
+	"phanthycode2api/internal/keepalive"
+	"phanthycode2api/internal/phanthy"
 	"phanthycode2api/internal/pool"
-	"phanthycode2api/internal/scheduler"
-	"phanthycode2api/internal/server"
-	"phanthycode2api/internal/upstream"
+	"phanthycode2api/internal/protocol"
 )
 
 func main() {
-	cfgPath := flag.String("config", "config.json", "path to config json")
+	configPath := flag.String("config", "", "配置文件路径；留空则自动尝试 ./config.json，并可用 P2A_* 环境变量覆盖")
 	flag.Parse()
 
-	cfg, err := Load(*cfgPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Printf("config %s not found, using defaults+env", *cfgPath)
-			cfg, err = Load("")
-		}
-		if err != nil {
-			log.Fatalf("load config: %v", err)
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+
+	path := *configPath
+	if path == "" {
+		if _, err := os.Stat("config.json"); err == nil {
+			path = "config.json"
 		}
 	}
-
-	auths, err := auth.LoadDir(cfg.AuthDir)
+	cfg, err := config.Load(path)
 	if err != nil {
-		log.Fatalf("load auths: %v", err)
-	}
-	log.Printf("loaded %d account(s) from %s", len(auths), cfg.AuthDir)
-
-	p := pool.New(cfg.StateFile)
-	for _, a := range auths {
-		p.Add(a)
+		logger.Fatalf("配置加载失败: %v", err)
 	}
 
-	up := upstream.New(cfg.BaseURL)
-	up.HTTP.Timeout = time.Duration(cfg.Upstream.TimeoutSeconds) * time.Second
-	up.FP = fingerprint.New(fingerprint.Config{
+	creds, warnings := credential.LoadDir(cfg.AuthDir)
+	for _, w := range warnings {
+		logger.Printf("凭证警告: %v", w)
+	}
+	if len(creds) == 0 {
+		logger.Printf("警告: %s 下没有可用凭证，服务会一直返回 503", cfg.AuthDir)
+	} else {
+		logger.Printf("已加载 %d 个账号凭证", len(creds))
+	}
+
+	p, err := pool.New(creds, cfg.StateFile)
+	if err != nil {
+		logger.Fatalf("账号池初始化失败: %v", err)
+	}
+
+	fp := phanthy.NewFingerprint(phanthy.FingerprintConfig{
 		Enabled:      cfg.Fingerprint.Enabled,
 		CliVersion:   cfg.Fingerprint.CliVersion,
 		Client:       cfg.Fingerprint.Client,
@@ -56,49 +62,54 @@ func main() {
 		UserAgent:    cfg.Fingerprint.UserAgent,
 		DeviceJSON:   cfg.Fingerprint.DeviceJSON,
 	})
-	if up.FP != nil {
-		log.Printf("fingerprint: enabled (client=%s source=%s product=%s)",
-			cfg.Fingerprint.Client, cfg.Fingerprint.ClientSource, cfg.Fingerprint.Product)
-	} else {
-		log.Printf("fingerprint: disabled")
+	if fp == nil {
+		logger.Printf("提示: 指纹头注入已关闭")
 	}
 
-	sch := scheduler.New(scheduler.Config{
-		Pool:           p,
-		Upstream:       up,
-		KeepaliveHours: cfg.Schedule.KeepaliveHours,
-		ProbeInterval:  cfg.ProbeDur,
+	client := phanthy.New(phanthy.Options{
+		BaseURL:     cfg.BaseURL,
+		Timeout:     cfg.UpstreamTimeout,
+		Fingerprint: fp,
 	})
 
-	h := server.NewHandler(server.Config{
-		Pool:         p,
-		Upstream:     up,
-		APIKey:       cfg.APIKey,
-		HardCooldown: cfg.HardCreditDur,
-		SoftCooldown: cfg.SoftRateDur,
-		ErrThreshold: cfg.Cooldown.ErrThresh,
-		ErrCooldown:  cfg.ErrCooldownDur,
-	})
+	gw := gateway.New(cfg, p, client, logger)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go sch.Run(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	scheduler := keepalive.New(client, p, logger, cfg.Schedule.KeepaliveHours, cfg.ProbeInterval)
+	scheduler.Start(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           h,
+		Handler:           gw.Handler(),
 		ReadHeaderTimeout: 30 * time.Second,
 	}
+
+	errCh := make(chan error, 1)
 	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
+		logger.Printf("监听 %s（上游 %s，模型别名 %d 个）", cfg.Listen, cfg.BaseURL, len(protocol.ModelList()))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+		close(errCh)
 	}()
 
-	log.Printf("phanthycode2api listening on %s (api_key=%v)", cfg.Listen, cfg.APIKey != "")
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("http: %v", err)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			logger.Fatalf("HTTP 服务异常退出: %v", err)
+		}
+	case sig := <-sigCh:
+		logger.Printf("收到信号 %s，开始优雅退出", sig)
 	}
-	log.Printf("bye")
+
+	cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Printf("优雅退出超时: %v", err)
+	}
 }
