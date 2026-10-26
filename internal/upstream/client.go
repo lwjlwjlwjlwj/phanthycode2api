@@ -402,10 +402,12 @@ func (c *Client) FetchProfile(a *auth.Auth) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+a.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "phanthycode2api/1.0")
+	if !c.applyAuth(req, a) {
+		return nil, &Error{Kind: ErrSessionDead, Status: 401, Msg: "no access_token"}
+	}
+	c.applyFP(req, a.UID)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -421,6 +423,44 @@ func (c *Client) FetchProfile(a *auth.Auth) (map[string]any, error) {
 		return nil, err
 	}
 	return m, nil
+}
+
+// FetchModels 拉取模型目录（M6 新端点 GET /api/phanthy_code/models）。
+// 成功体 BLOCKED-CRED：只回传原始 JSON，由调用方防御性解析。
+func (c *Client) FetchModels(a *auth.Auth) ([]byte, error) {
+	return c.getJSON(a, c.ModelsURL, nil)
+}
+
+// FetchModelStats 拉取模型统计/余额（M6 新端点 GET /api/phanthy_code/models/stats）。
+// 成功体 BLOCKED-CRED：只回传原始 JSON，由调用方防御性解析。
+func (c *Client) FetchModelStats(a *auth.Auth) ([]byte, error) {
+	return c.getJSON(a, c.ModelStatsURL, map[string]string{"Accept": "application/json"})
+}
+
+// getJSON 通用 GET：Bearer/x-api-key + 指纹头 + 可附加请求头。
+func (c *Client) getJSON(a *auth.Auth, url string, extra map[string]string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !c.applyAuth(req, a) {
+		return nil, &Error{Kind: ErrSessionDead, Status: 401, Msg: "no access_token"}
+	}
+	c.applyFP(req, a.UID)
+	for k, v := range extra {
+		req.Header.Set(k, v)
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		kind := Classify(resp.StatusCode, string(raw))
+		return nil, &Error{Kind: kind, Status: resp.StatusCode, Msg: truncate(string(raw), 200)}
+	}
+	return raw, nil
 }
 
 func truncate(s string, n int) string {
