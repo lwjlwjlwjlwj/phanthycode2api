@@ -19,15 +19,19 @@ func decode(t *testing.T, body []byte) map[string]any {
 	return m
 }
 
-func TestUpstreamModelAlias(t *testing.T) {
-	if got := UpstreamModel("DeepSeek-V4"); got != "Iris-1.0" {
-		t.Fatalf("alias = %q", got)
+func TestModelList(t *testing.T) {
+	// 名单取自公开定价页 /token-plan 的可用模型列表（Layer A，PUBLIC-MARKETING），共 13 条。
+	entries := ModelList()
+	if len(entries) != 13 {
+		t.Fatalf("model list should contain 13 entries, got %d", len(entries))
 	}
-	if got := UpstreamModel("unknown-model"); got != "unknown-model" {
-		t.Fatalf("unknown model should pass through, got %q", got)
+	for _, e := range entries {
+		if e.Object != "model" || e.OwnedBy != "phanthy" {
+			t.Fatalf("entry = %+v", e)
+		}
 	}
-	if len(ModelList()) != 13 {
-		t.Fatalf("model list should contain 13 entries, got %d", len(ModelList()))
+	if entries[0].ID != "Phanthy-fast" {
+		t.Fatalf("first entry = %q", entries[0].ID)
 	}
 }
 

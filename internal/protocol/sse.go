@@ -256,8 +256,13 @@ func (c *Collector) Usage() (prompt, completion int) {
 	}
 	// 对齐 new-api HandleStreamFinalResponse 的 ResponseText2Usage：
 	// prompt 用宿主估算值、completion 用 tokenkit.Estimate、total 求和，仅全 0 时补。
+	// 估算所用模型名优先取上游回填名，未回填时退回客户端请求名（两者均为透传名）。
 	prompt = c.estPrompt
-	completion = tokenkit.Estimate(UpstreamModel(c.clientModel), c.info.ResponseText.String())
+	model := c.UpstreamModel()
+	if model == "" {
+		model = c.clientModel
+	}
+	completion = tokenkit.Estimate(model, c.info.ResponseText.String())
 	return prompt, completion
 }
 
