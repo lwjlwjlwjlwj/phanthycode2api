@@ -59,7 +59,8 @@ func TestBuildAnthropicRequestBasic(t *testing.T) {
 	}
 	m := decode(t, body)
 
-	if m["model"] != "Iris-1.0" {
+	// 模型名原样透传（证据 §6.3，不做别名映射；Layer B 映射已删除）。
+	if m["model"] != "DeepSeek-V4" {
 		t.Fatalf("model = %v", m["model"])
 	}
 	if m["stream"] != true {
