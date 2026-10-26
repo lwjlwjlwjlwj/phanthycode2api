@@ -1,8 +1,9 @@
-// Package scheduler 定时任务：token keepalive。
+// Package scheduler 定时任务：token keepalive + 可选周期性余额探测。
 package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -16,6 +17,7 @@ type Config struct {
 	Pool           *pool.Pool
 	Upstream       *upstream.Client
 	KeepaliveHours []int // 默认 [22]
+	ProbeInterval  time.Duration // 0 = 关闭余额探测
 }
 
 // Scheduler 调度器。
@@ -51,6 +53,16 @@ func (s *Scheduler) Run(ctx context.Context) {
 	// 启动时立即执行一次 keepalive（保证服务起来后账号立即可用）
 	log.Printf("scheduler: running initial keepalive")
 	s.RunKeepaliveNow()
+	if s.cfg.ProbeInterval > 0 {
+		log.Printf("scheduler: running initial balance probe")
+		s.RunProbeNow()
+	}
+
+	var probeTick *time.Ticker
+	if s.cfg.ProbeInterval > 0 {
+		probeTick = time.NewTicker(s.cfg.ProbeInterval)
+		defer probeTick.Stop()
+	}
 
 	for {
 		next := nextFire(time.Now(), s.cfg.KeepaliveHours)
@@ -61,8 +73,18 @@ func (s *Scheduler) Run(ctx context.Context) {
 			return
 		case <-timer.C:
 			s.RunKeepaliveNow()
+		case <-probeTickC(probeTick):
+			s.RunProbeNow()
 		}
 	}
+}
+
+// probeTickC 返回探测定时器的触发通道；nil（探测关闭）时返回永不触达的通道。
+func probeTickC(t *time.Ticker) <-chan time.Time {
+	if t == nil {
+		return make(chan time.Time)
+	}
+	return t.C
 }
 
 // RunKeepaliveNow 立即对所有账号刷新 token；session 死亡的自动禁用。
