@@ -1,0 +1,35 @@
+=== .well-known/jwks.json ===
+captured: 2026-10-26T05:58:58+08:00
+command: curl -sS --max-time 30 -H 'Accept: application/json' -D - https://code.phanthy.com/.well-known/jwks.json
+
+--- RESPONSE HEADERS ---
+HTTP/1.1 200 OK
+date: Sun, 25 Oct 2026 21:58:41 GMT
+
+HTTP/2 200 
+content-type: application/json
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+x-kong-upstream-latency: 10
+x-kong-proxy-latency: 1
+via: kong/2.5.1
+server: TencentEdgeOne
+date: Sun, 25 Oct 2026 21:58:41 GMT
+eo-log-uuid: 193705237780771673
+eo-cache-status: MISS
+
+--- RAW BODY ---
+{"keys":[{"kty":"RSA","n":"zq-R_Psl5bVFuMPzhAZSZDGbnB1BRj9n1ko9sFnZwN7RfB7ePi7D2LPmPtdUdgO6lp1xVxZ3Cpb6lyOOw7t9Bb5D0Xfq20Gq1lunp8D4yTO6Ejj8VFZU3xPkA4ppMw3fARwvXl6SGHYlMxtrpSJc5UTg7PKflKOOv6hzeF5PBP6202vN_j88ErqUaAnMPbNcIpEADL8F85ae4uwwUZA3db_Ro_NtT8ifbi92fq0OkAHqDOxGoDCg8j5ygNfbuHSZrLn-Kx3m4OCG7enVSkArBIJyYS_PZf34ycIPIHEAFFgCvwGCdTeQAa3tQcAzmBEQEgouw9MmzMUzkT1DbB-eQQ","e":"AQAB","kid":"configured-key","use":"sig","alg":"RS256"}]}
+--- PARSED (pretty) ---
+{
+    "keys": [
+        {
+            "kty": "RSA",
+            "n": "zq-R_Psl5bVFuMPzhAZSZDGbnB1BRj9n1ko9sFnZwN7RfB7ePi7D2LPmPtdUdgO6lp1xVxZ3Cpb6lyOOw7t9Bb5D0Xfq20Gq1lunp8D4yTO6Ejj8VFZU3xPkA4ppMw3fARwvXl6SGHYlMxtrpSJc5UTg7PKflKOOv6hzeF5PBP6202vN_j88ErqUaAnMPbNcIpEADL8F85ae4uwwUZA3db_Ro_NtT8ifbi92fq0OkAHqDOxGoDCg8j5ygNfbuHSZrLn-Kx3m4OCG7enVSkArBIJyYS_PZf34ycIPIHEAFFgCvwGCdTeQAa3tQcAzmBEQEgouw9MmzMUzkT1DbB-eQQ",
+            "e": "AQAB",
+            "kid": "configured-key",
+            "use": "sig",
+            "alg": "RS256"
+        }
+    ]
+}

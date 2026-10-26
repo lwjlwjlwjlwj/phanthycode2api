@@ -1,0 +1,31 @@
+=== GET / timing: 2026-10-26T05:58:24+08:00 ===
+--- command: curl -sS --http2 -D - -o /dev/null https://code.phanthy.com/ ---
+
+HTTP/1.1 200 OK
+date: Sun, 25 Oct 2026 21:58:24 GMT
+
+HTTP/2 200 
+content-type: text/html; charset=utf-8
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+link: </phanthy-code-logo-icon.png>; rel=preload; as="image"
+x-powered-by: Next.js
+x-kong-upstream-latency: 15
+x-kong-proxy-latency: 0
+via: kong/2.5.1
+server: TencentEdgeOne
+cache-control: private, must-revalidate, no-cache, no-store, max-age=0
+date: Sun, 25 Oct 2026 21:58:24 GMT
+eo-log-uuid: 15187889701874199763
+eo-cache-status: MISS
+
+
+--- curl -w verbose ---
+http_version=2
+http_code=200
+content_type=text/html; charset=utf-8
+size_download=56923
+remote_ip=127.0.0.1
+num_connects=1
+time_total=0.153464
+redirect_url=

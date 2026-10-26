@@ -1,0 +1,1446 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PhanthyCode AI API (reverse-engineered)",
+    "version": "1.0.0",
+    "summary": "Anonymous-surface, evidence-graded OpenAPI model of https://code.phanthy.com",
+    "description": "Reverse-engineered description of the PhanthyCode AI surface at https://code.phanthy.com, derived from the M1 anonymous capture window 2026-10-26T05:58:24+08:00 → 2026-10-26T06:14:37+08:00 (evidence/M1-index.md:15) plus the in-repo prior art. No authenticated request, no login, no token exchange and no credential use was performed while producing this document.\n\nEVIDENCE GRADES USED THROUGHOUT\n- VERIFIED: directly observed on the live target during the M1 anonymous capture; anchored to a file:line in /workspace/re/evidence/.\n- PRIOR-ART: derived only from the in-repo Go implementation / README (e.g. cmd/login/main.go, internal/upstream/client.go). Describes what this repository does, NOT what the target does.\n- INFERRED: reasoned from protocol metadata or convention, basis stated inline. Must be re-tested.\n- BLOCKED-CRED: requires the user's own token; nothing was fabricated.\n\nAUTHENTICATED BEHAVIOUR IS PRIOR-ART / BLOCKED-CRED. In particular the request wire contract of POST /v1/messages and the concrete success bodies of POST /oauth/token, POST /oauth/revoke, GET /api/oauth/profile and GET /api/oauth/claude_cli/roles have never been observed. Where a schema is marked prior-art it is a model of the repository's client, not a live capture. The model roster is 'PRIOR-ART / unverified live': GET /v1/models returns the HTML 404 shell (evidence/M1-anon-probe-matrix.txt:73).\n\nVERIFIED ABSENT (must not be treated as operations): GET /v1/models, POST /v1/messages/count_tokens, GET /api/health, GET /healthz, POST /api/oauth/phanthy_cli/create_api_key, POST /api/oauth/claude_cli/create_api_key. All six return a 404 Next.js HTML shell (26,573–26,614 B) rather than a JSON error (evidence/M1-anon-probe-matrix.txt:67-68, 72-73, 78-79; docs/01-endpoint-catalog.md:443-462).\n\nDOCUMENTED TARGET-SIDE ERROR ENVELOPE: only three codes have ever been observed, all sharing {\"error\":{\"code\",\"message\"}}: unsupported_response_type (evidence/M1-anon-probe-matrix.txt:112), missing_login (:163, :190), invalid_platform (:245, :365). There is no JSON 404 taxonomy: unknown API paths return the HTML app shell, so this document intentionally models no JSON 404 body.\n\nGOVERNANCE: the capture and this model follow docs/00-governance.md (read-only reverse engineering, no auth bypass, no brute force, no DoS, no L2 secret persistence). No secret appears here; only <api_key>, <token>, <access_token>, <authorization_code>, <pkce_code_verifier> placeholders are used.",
+    "contact": {
+      "name": "Reverse-engineering programme (M4 deliverables)"
+    },
+    "license": {
+      "name": "Internal research documentation — not affiliated with the target"
+    },
+    "x-evidence-grades": {
+      "VERIFIED": "Directly observed during the M1 anonymous capture (evidence/* file:line).",
+      "PRIOR-ART": "Derived from the in-repo Go implementation / README only.",
+      "INFERRED": "Reasoned from metadata or convention; basis stated inline.",
+      "BLOCKED-CRED": "Requires the user's own token; never exercised, nothing fabricated."
+    },
+    "x-verified-absent-paths": [
+      "/v1/models",
+      "/v1/messages/count_tokens",
+      "/api/health",
+      "/healthz",
+      "/api/oauth/phanthy_cli/create_api_key",
+      "/api/oauth/claude_cli/create_api_key"
+    ]
+  },
+  "servers": [
+    {
+      "url": "https://code.phanthy.com",
+      "description": "Production origin (VERIFIED; Next.js behind Kong 2.5.1 + TencentEdgeOne — evidence/M1-root-headers.txt:13-20)."
+    }
+  ],
+  "tags": [
+    {
+      "name": "OAuth",
+      "description": "Authorization-code + PKCE flow: authorize, token, revoke, and the login-complete landing page."
+    },
+    {
+      "name": "OIDC",
+      "description": "Discovery metadata and public signing keys under /.well-known/ (OAuth 2.0 metadata served under an OIDC file name)."
+    },
+    {
+      "name": "Account",
+      "description": "Bearer-guarded account and entitlement lookups under /api/oauth/."
+    },
+    {
+      "name": "Inference",
+      "description": "Anthropic Messages API inference surface."
+    },
+    {
+      "name": "Web",
+      "description": "Web application shell and browser-side event ingest."
+    },
+    {
+      "name": "Assets",
+      "description": "Client artifact download and public-asset redirect."
+    },
+    {
+      "name": "Meta",
+      "description": "Crawler metadata: robots.txt and sitemap.xml."
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "appShellGet",
+        "tags": [
+          "Web"
+        ],
+        "summary": "Next.js web application shell",
+        "description": "VERIFIED: GET / returned 200 text/html (56,923 B transferred, streamed with no content-length) and a Next.js app shell with lang=\"zh-CN\" (evidence/M1-anon-probe-matrix.txt:59, 87-101; M1-root-headers.txt:7-31). No authentication and no parameters.\n\nMETHOD-DISCOVERY ANOMALY: OPTIONS / returns 400 with a 0-byte body and no Allow header, while GET / returns 200 (evidence/M1-options-matrix.txt:14, 37-52). This is an app-router artifact, not an auth signal; it is why method discovery must use OPTIONS on API paths only.\n\nThis operation is included for completeness of the observed surface; it carries no JSON protocol semantics.",
+        "x-evidence-grade": "VERIFIED",
+        "responses": {
+          "200": {
+            "description": "VERIFIED: HTML app shell. Streamed; no content-length header is emitted (evidence/M1-anon-probe-matrix.txt:83).",
+            "headers": {
+              "strict-transport-security": {
+                "description": "VERIFIED: max-age=31536000; includeSubDomains (the only security header observed).",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=31536000; includeSubDomains"
+              },
+              "cache-control": {
+                "description": "VERIFIED: private, must-revalidate, no-cache, no-store, max-age=0.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "private, must-revalidate, no-cache, no-store, max-age=0"
+              }
+            },
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "description": "Next.js app-router HTML document."
+                },
+                "example": "<!DOCTYPE html><html dir=\"ltr\" lang=\"zh-CN\"><head><meta charSet=\"utf-8\"/>…</html>"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/authorize": {
+      "get": {
+        "operationId": "oauthAuthorize",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Authorization-code + PKCE entry point",
+        "description": "EXISTENCE VERIFIED (EX-400): an anonymous GET without parameters reaches input validation and returns a JSON error, proving the handler exists and that validation precedes login (docs/01-endpoint-catalog.md:142-170; evidence/M1-anon-probe-matrix.txt:60, 104-112).\n\nPARAMETER SET — PRIOR-ART from cmd/login/main.go:144-154. `response_type=code` is VERIFIED as the only accepted value by the server's own error text; `code_challenge_method=S256` is VERIFIED by discovery metadata (evidence/M1-openid-configuration.json:14-16). The success redirect (302 to redirect_uri with code and state) is INFERRED from RFC 6749 §4.1.2 and cmd/login/main.go:69-71; it has never been observed (BLOCKED-CRED requires an interactive browser login).\n\nCLIENT IDENTITY: public client, client_id=phanthy-code-cli, no client secret (token_endpoint_auth_methods_supported=[none] — evidence/M1-openid-configuration.json:17-19; cmd/login/main.go:28, 146).",
+        "x-evidence-grade": "VERIFIED (existence, error text); PRIOR-ART (parameters); INFERRED (success redirect)",
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "query",
+            "required": true,
+            "description": "PRIOR-ART: the CLI sends `phanthy-code-cli` (cmd/login/main.go:28, 146).",
+            "schema": {
+              "type": "string",
+              "default": "phanthy-code-cli"
+            }
+          },
+          {
+            "name": "response_type",
+            "in": "query",
+            "required": true,
+            "description": "VERIFIED: only `code` is supported. A missing value produces `unsupported_response_type` with the message `Only authorization code flow is supported.` (evidence/M1-anon-probe-matrix.txt:60, 112).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "code"
+              ]
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": true,
+            "description": "PRIOR-ART: https://code.phanthy.com/oauth/code/success, replayed verbatim at token exchange (cmd/login/main.go:148, 182).",
+            "schema": {
+              "type": "string",
+              "format": "uri",
+              "example": "https://code.phanthy.com/oauth/code/success"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "PRIOR-ART requested scope string, space-delimited: `user:inference user:profile user:sessions:claude_code` (cmd/login/main.go:149). All five advertised scope names are VERIFIED at evidence/M1-openid-configuration.json:20-26; `user:mcp_servers` and `user:file_upload` are advertised but never requested by the prior art.",
+            "schema": {
+              "type": "string",
+              "example": "user:inference user:profile user:sessions:claude_code"
+            }
+          },
+          {
+            "name": "code_challenge",
+            "in": "query",
+            "required": true,
+            "description": "PRIOR-ART: base64url(SHA-256(code_verifier)) without padding (cmd/login/main.go:51-56).",
+            "schema": {
+              "type": "string",
+              "example": "<pkce_code_challenge>"
+            }
+          },
+          {
+            "name": "code_challenge_method",
+            "in": "query",
+            "required": true,
+            "description": "VERIFIED: S256 is the only supported method (evidence/M1-openid-configuration.json:14-16; cmd/login/main.go:151).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "S256"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "PRIOR-ART: the CLI uses the static value `p2a-login`, which provides no CSRF binding (cmd/login/main.go:152). A per-flow random state is recommended.",
+            "schema": {
+              "type": "string",
+              "example": "<state>"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "VERIFIED: input validation failure before any auth check. Exactly this body and code were observed for a parameterless request (101 B — evidence/M1-anon-probe-matrix.txt:60, 112).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "unsupported_response_type",
+                    "message": "Only authorization code flow is supported."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "operationId": "oauthToken",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Exchange an authorization code or refresh token for tokens",
+        "description": "EXISTENCE VERIFIED, BODY NOT EXERCISED: OPTIONS advertises `Allow: OPTIONS, POST`, while GET and HEAD return 405 with 0 bytes and no Allow header (evidence/M1-options-matrix.txt:16; M1-anon-probe-matrix.txt:61-62). The POST itself has never been issued (BLOCKED-CRED).\n\nAUTH MODEL: public client — `token_endpoint_auth_methods_supported: [\"none\"]` is VERIFIED (evidence/M1-openid-configuration.json:17-19), so no Authorization header and no client secret; client_id travels in the form body.\n\nFORM FIELDS — PRIOR-ART: authorization_code grant = grant_type, code, code_verifier, redirect_uri, client_id (cmd/login/main.go:177-183); refresh_token grant = grant_type, refresh_token, client_id with no code_verifier (internal/upstream/client.go:238-245). Prior art also sends `Content-Type: application/x-www-form-urlencoded`, `Accept: application/json` and `anthropic-beta: oauth-2025-04-20` (cmd/login/main.go:191-193; client.go:139, 243). Whether the beta header is REQUIRED is INFERRED and unproven.\n\nRESPONSE SHAPE — PRIOR-ART: JSON with access_token (required by the caller), refresh_token and expires_in (seconds) (cmd/login/main.go:171-175, 208-218; client.go:248-258). The prior art also assumes an OAuth error envelope may arrive with HTTP 200 (client.go:158-169); that is an assumption, not an observation.",
+        "x-evidence-grade": "VERIFIED (existence); PRIOR-ART (request/response); BLOCKED-CRED (live exchange)",
+        "parameters": [
+          {
+            "name": "anthropic-beta",
+            "in": "header",
+            "required": false,
+            "description": "PRIOR-ART: `oauth-2025-04-20` is sent by the only known working client (cmd/login/main.go:193; internal/upstream/client.go:139, 243). Requiredness is INFERRED, not observed.",
+            "schema": {
+              "type": "string",
+              "example": "oauth-2025-04-20"
+            }
+          },
+          {
+            "name": "Accept",
+            "in": "header",
+            "required": false,
+            "description": "PRIOR-ART: application/json (cmd/login/main.go:192).",
+            "schema": {
+              "type": "string",
+              "example": "application/json"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "application/x-www-form-urlencoded. Two grants are supported by prior art; field presence differs per grant (see schema description).",
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "grant_type",
+                  "client_id"
+                ],
+                "properties": {
+                  "grant_type": {
+                    "type": "string",
+                    "enum": [
+                      "authorization_code",
+                      "refresh_token"
+                    ],
+                    "description": "VERIFIED as the supported grant set by discovery metadata (evidence/M1-openid-configuration.json:10-13)."
+                  },
+                  "client_id": {
+                    "type": "string",
+                    "default": "phanthy-code-cli",
+                    "description": "PRIOR-ART (cmd/login/main.go:183; internal/upstream/client.go:138)."
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "authorization_code grant only. PRIOR-ART (cmd/login/main.go:180).",
+                    "example": "<authorization_code>"
+                  },
+                  "code_verifier": {
+                    "type": "string",
+                    "description": "authorization_code grant only; the PKCE verifier matching code_challenge. PRIOR-ART (cmd/login/main.go:181).",
+                    "example": "<pkce_code_verifier>"
+                  },
+                  "redirect_uri": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "authorization_code grant only; must equal the value used at /oauth/authorize. PRIOR-ART (cmd/login/main.go:182).",
+                    "example": "https://code.phanthy.com/oauth/code/success"
+                  },
+                  "refresh_token": {
+                    "type": "string",
+                    "description": "refresh_token grant only; no code_verifier is sent on this grant. PRIOR-ART (internal/upstream/client.go:238-242).",
+                    "example": "<refresh_token>"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "examples": {
+                "authorizationCode": {
+                  "summary": "authorization_code grant (PRIOR-ART)",
+                  "value": {
+                    "grant_type": "authorization_code",
+                    "code": "<authorization_code>",
+                    "code_verifier": "<pkce_code_verifier>",
+                    "redirect_uri": "https://code.phanthy.com/oauth/code/success",
+                    "client_id": "phanthy-code-cli"
+                  }
+                },
+                "refreshToken": {
+                  "summary": "refresh_token grant (PRIOR-ART)",
+                  "value": {
+                    "grant_type": "refresh_token",
+                    "refresh_token": "<refresh_token>",
+                    "client_id": "phanthy-code-cli"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PRIOR-ART / NEVER OBSERVED. Expected token response per the repository's caller. Extra fields may exist; `token_type` and `scope` are not referenced anywhere in the prior art and are therefore unknown.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                },
+                "example": {
+                  "access_token": "<access_token>",
+                  "refresh_token": "<refresh_token>",
+                  "expires_in": 3600
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PRIOR-ART / INFERRED: OAuth error envelope. `invalid_grant` is named by the login tool's hint text for an expired code (cmd/login/main.go:94). No HTTP error has been observed on this path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_grant",
+                    "message": "<error message>"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/revoke": {
+      "post": {
+        "operationId": "oauthRevoke",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Revoke an access or refresh token (RFC 7009)",
+        "description": "EXISTENCE VERIFIED: OPTIONS advertises `Allow: OPTIONS, POST` (evidence/M1-options-matrix.txt:17) and the endpoint is advertised as `revocation_endpoint` in discovery metadata (evidence/M1-openid-configuration.json:5). GET and HEAD return 405 with 0 bytes and no Allow header (evidence/M1-anon-probe-matrix.txt:63-64).\n\nALL SEMANTICS ARE INFERRED: no call site exists anywhere in /workspace, so the body is modelled from RFC 7009 §2.1 (form-urlencoded `token` plus optional `token_type_hint`; a `client_id` is plausible but unproven). The response is expected to be 200 with an empty body per RFC 7009 §2.2. No request was made and no response was observed (BLOCKED-CRED).",
+        "x-evidence-grade": "VERIFIED (existence); INFERRED (all semantics); BLOCKED-CRED (body)",
+        "requestBody": {
+          "required": true,
+          "description": "application/x-www-form-urlencoded, INFERRED from RFC 7009 §2.1. Not observed.",
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "The access token or refresh token to revoke.",
+                    "example": "<token>"
+                  },
+                  "token_type_hint": {
+                    "type": "string",
+                    "enum": [
+                      "access_token",
+                      "refresh_token"
+                    ],
+                    "description": "Optional hint, RFC 7009 §2.1."
+                  },
+                  "client_id": {
+                    "type": "string",
+                    "default": "phanthy-code-cli",
+                    "description": "Plausible but UNPROVEN; no prior-art call site exists."
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "INFERRED from RFC 7009 §2.2: empty body on success. NEVER OBSERVED."
+          },
+          "400": {
+            "description": "INFERRED from RFC 7009 §2.2.1 (e.g. `unsupported_token_type`). NEVER OBSERVED.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "unsupported_token_type",
+                    "message": "<error message>"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/code/success": {
+      "get": {
+        "operationId": "oauthCodeSuccessGet",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Static login-complete landing page (the registered redirect_uri)",
+        "description": "VERIFIED: 200 text/html, 1,769 B, a hand-written static page titled `PhanthyCode 登录完成` with inline CSS and no server-side dynamic data (evidence/M1-anon-probe-matrix.txt:65, 143-152; M1-options-matrix.txt:18).\n\nQUERY HANDLING IS INFERRED: this path is the registered redirect_uri (cmd/login/main.go:148) and the prior art instructs the user to copy the authorization code shown on the page (cmd/login/main.go:69-71), so `code` and `state` are expected to arrive as query parameters and be read client-side. The served HTML is static, so the server does not render them. Whether the page actually displays the code cannot be confirmed without an interactive authorization (BLOCKED-CRED).",
+        "x-evidence-grade": "VERIFIED (200, static body); INFERRED (query handling)",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "description": "INFERRED: authorization code appended to the redirect (RFC 6749 §4.1.2). Not server-rendered.",
+            "schema": {
+              "type": "string",
+              "example": "<authorization_code>"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "INFERRED: state returned by the authorization server (RFC 6749 §4.1.2).",
+            "schema": {
+              "type": "string",
+              "example": "<state>"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VERIFIED: static HTML success page.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "<!doctype html>\n<html lang=\"zh-CN\">\n  <head>\n    <meta charset=\"utf-8\">\n    <title>PhanthyCode 登录完成</title>\n    <style>…</style>\n  </head>…</html>"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/openid-configuration": {
+      "get": {
+        "operationId": "openidConfigurationGet",
+        "tags": [
+          "OIDC"
+        ],
+        "summary": "OAuth/OIDC discovery metadata",
+        "description": "VERIFIED at field level: 200 application/json served from this exact URL (evidence/M1-anon-probe-matrix.txt:450-466; full document at evidence/M1-openid-configuration.json:2-26). Only field-level equality is claimed — the served body is minified and the stored file is pretty-printed (acceptance/M1.md:32).\n\nIMPORTANT ABSENCES (verified by the complete field list): no `userinfo_endpoint`, no `id_token_signing_alg_values_supported`, no `subject_types_supported`, and no `openid` scope. This is OAuth 2.0 metadata with PKCE under an OIDC file name (docs/01-endpoint-catalog.md:255-257).",
+        "x-evidence-grade": "VERIFIED",
+        "responses": {
+          "200": {
+            "description": "VERIFIED: discovery document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenIDConfiguration"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/jwks.json": {
+      "get": {
+        "operationId": "jwksGet",
+        "tags": [
+          "OIDC"
+        ],
+        "summary": "Public signing-key set (RS256)",
+        "description": "VERIFIED: 200 application/json returning exactly one RSA signing key with `kty=RSA`, `e=AQAB`, `use=sig`, `alg=RS256`, `kid=configured-key` (evidence/M1-jwks.json:22, 29-32). Only public key material is present.\n\nINTERPRETATION (INFERRED): the RS256 key suggests the access token may be a signed JWT, but no token was ever observed, so claims, `exp` and signature verification are unverified (BLOCKED-CRED). `kid=configured-key` is a default-style identifier, so key rotation is not demonstrated (docs/01-endpoint-catalog.md:265-279).",
+        "x-evidence-grade": "VERIFIED (key material); INFERRED (token format)",
+        "responses": {
+          "200": {
+            "description": "VERIFIED: JWKS document with one key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Jwks"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/oauth/profile": {
+      "get": {
+        "operationId": "profileGet",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Account profile of the bearer-token holder",
+        "description": "EXISTENCE AND GUARD VERIFIED: anonymous GET returns 401 application/json with `{\"error\":{\"code\":\"missing_login\",\"message\":\"Bearer access token is required.\"}}` (79 B) and `WWW-Authenticate: Bearer realm=\"phanthy-code\", error=\"invalid_request\"` (evidence/M1-anon-probe-matrix.txt:66, 154-163; M1-options-matrix.txt:19).\n\nSUCCESS SCHEMA IS BLOCKED-CRED: the prior-art client decodes an untyped map and has no production call site, so no field is known (internal/upstream/client.go:369-394). No example body is provided on purpose.",
+        "x-evidence-grade": "VERIFIED (existence + bearer guard); BLOCKED-CRED (success schema)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BLOCKED-CRED: success body never observed. No schema and no example are asserted."
+          },
+          "401": {
+            "description": "VERIFIED: bearer token missing. Body is byte-identical to the guard on /api/oauth/claude_cli/roles.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "VERIFIED challenge. The realm name is disclosed to unauthenticated callers.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Bearer realm=\"phanthy-code\", error=\"invalid_request\", error_description=\"Bearer access token is required.\""
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_login",
+                    "message": "Bearer access token is required."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/oauth/claude_cli/roles": {
+      "get": {
+        "operationId": "claudeCliRolesGet",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Role / entitlement lookup for the claude_cli integration",
+        "description": "EXISTENCE AND GUARD VERIFIED: an anonymous GET returns the same 401 envelope and byte-identical 79 B body as /api/oauth/profile (evidence/M1-anon-probe-matrix.txt:69, 184-190; M1-options-matrix.txt:22).\n\nSEMANTICS ARE BLOCKED-CRED: the success body has never been observed. The purpose is INFERRED from the path name only — a list of roles or plan entitlements for the `claude_cli` integration — while the sibling `create_api_key` route returns the HTML 404 shell (docs/01-endpoint-catalog.md:298-311). A query parameter may select a product/tenant, but no evidence exists.",
+        "x-evidence-grade": "VERIFIED (existence + bearer guard); BLOCKED-CRED (semantics)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product",
+            "in": "query",
+            "required": false,
+            "description": "INFERRED ONLY — a selector may exist; no evidence. Do not rely on this parameter.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BLOCKED-CRED: success body never observed. No schema and no example are asserted."
+          },
+          "401": {
+            "description": "VERIFIED: same guard as /api/oauth/profile (missing_login, 79 B).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "VERIFIED challenge.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Bearer realm=\"phanthy-code\", error=\"invalid_request\", error_description=\"Bearer access token is required.\""
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_login",
+                    "message": "Bearer access token is required."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/messages": {
+      "post": {
+        "operationId": "messagesCreate",
+        "tags": [
+          "Inference"
+        ],
+        "summary": "Anthropic Messages API inference (JSON or SSE stream)",
+        "description": "EXISTENCE VERIFIED, WIRE CONTRACT PRIOR-ART: OPTIONS advertises `Allow: OPTIONS, POST`; GET and HEAD return 405 with 0 bytes and no Allow header (evidence/M1-options-matrix.txt:23; M1-anon-probe-matrix.txt:70-71). The POST has never been issued on the live target (BLOCKED-CRED).\n\nTWO ALTERNATIVE CREDENTIAL SCHEMES (neither observed live): `x-api-key: <api_key>` is preferred by the prior art when a key exists, otherwise `Authorization: Bearer <access_token>` is used (internal/upstream/client.go:344-350; cmd/login/main.go:97-104). Both are modelled as security alternatives. Additional prior-art headers: `x-app: cli`, `User-Agent: phanthycode2api/1.0`, `Accept: application/json, text/event-stream` (client.go:341-343). No `anthropic-version` header is sent anywhere in the repository, so its absence is presumed tolerated (INFERRED).\n\nREQUEST SCHEMA — PRIOR-ART from internal/upstream/payload.go:47-60: model, max_tokens (always serialized; clamped 1..65536 to 8192 by the proxy at payload.go:117-119), messages[], optional system, temperature, top_p, stream, tools, tool_choice, stop_sequences, metadata. The proxy forces `stream: true` (payload.go:109), so a non-streaming JSON response has never been produced by the prior art.\n\nRESPONSE — NEVER OBSERVED. Two media types are modelled: non-streaming `application/json` (loose, inferred from the message_start payload at internal/upstream/sse.go:18-25) and `text/event-stream`. For SSE, the prior art reads only `data:` lines and treats the JSON `type` field as authoritative, ignoring `event:` names; it handles message_start, content_block_start, content_block_delta (text_delta / thinking_delta / input_json_delta), message_delta and message_stop, and has no `error` branch, so a mid-stream error event is silently dropped (internal/upstream/sse.go:188-276; docs/02-usage-semantics.md:165-227). Named examples below are illustrative frame shapes derived from that prior art and its test fixture, not live captures.\n\nERROR TAXONOMY: 402/429/5xx classification belongs to the proxy, not the target; no 402, 429 or RateLimit-* header has ever been observed (docs/02-usage-semantics.md:283-290). Only 400/401 error envelopes are modelled, and only as documented shape, not as observations on this path.",
+        "x-evidence-grade": "VERIFIED (existence); PRIOR-ART (wire contract); BLOCKED-CRED (auth scheme + live response)",
+        "security": [
+          {
+            "apiKeyAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-app",
+            "in": "header",
+            "required": false,
+            "description": "PRIOR-ART: literal `cli` (internal/upstream/client.go:342). Whether the target requires it is unverified.",
+            "schema": {
+              "type": "string",
+              "example": "cli"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Anthropic Messages API request body. PRIOR-ART / BLOCKED-CRED: modelled from the repository's client, never observed live.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnthropicMessagesRequest"
+              },
+              "examples": {
+                "minimal": {
+                  "summary": "Minimal prior-art request",
+                  "value": {
+                    "model": "Iris-1.0",
+                    "max_tokens": 64,
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": "Reply with exactly: ok"
+                      }
+                    ]
+                  }
+                },
+                "streamingWithTools": {
+                  "summary": "Streaming prior-art request with a tool",
+                  "value": {
+                    "model": "Iris-1.0",
+                    "max_tokens": 256,
+                    "stream": true,
+                    "system": "<system prompt>",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": "What is the weather in Beijing?"
+                      }
+                    ],
+                    "tools": [
+                      {
+                        "name": "get_weather",
+                        "description": "Return the current weather for a city.",
+                        "input_schema": {
+                          "type": "object",
+                          "properties": {
+                            "city": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "tool_choice": {
+                      "type": "auto"
+                    },
+                    "metadata": {
+                      "user_id": "<user_id>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PRIOR-ART / NEVER OBSERVED. Non-streaming JSON message. The proxy never requests a non-streaming response and instead aggregates the SSE stream locally (internal/upstream/sse.go:278-331). The schema is deliberately loose and its field set is inferred from the message_start payload and the repository's test fixture (sse.go:18-25; sse_test.go:11).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE text stream of `data: <json>` lines separated by blank lines. Event names shown in examples are illustrative."
+                },
+                "examples": {
+                  "messageStart": {
+                    "summary": "message_start — first event; carries message id/model and input token usage (PRIOR-ART)",
+                    "value": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_<id>\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"Iris-1.0\",\"usage\":{\"input_tokens\":12}}}\n\n"
+                  },
+                  "contentBlockStart": {
+                    "summary": "content_block_start — text or tool_use block opens (PRIOR-ART)",
+                    "value": "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n"
+                  },
+                  "contentBlockDelta": {
+                    "summary": "content_block_delta — text_delta / thinking_delta / input_json_delta (PRIOR-ART)",
+                    "value": "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n"
+                  },
+                  "messageDelta": {
+                    "summary": "message_delta — stop reason and final usage (PRIOR-ART)",
+                    "value": "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":2}}\n\n"
+                  },
+                  "messageStop": {
+                    "summary": "message_stop — terminal event; the prior art terminates on EOF instead (PRIOR-ART)",
+                    "value": "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+                  },
+                  "errorEvent": {
+                    "summary": "error — modelled but DROPPED by the prior-art parser (no handler branch) (INFERRED from sse.go:44-47, 188-276)",
+                    "value": "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"<message>\"}}\n\n"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "PRIOR-ART / INFERRED: request validation error using the observed envelope shape. NEVER OBSERVED on this path. A clean 4xx probe with an invalid model is planned as C5 in docs/02-usage-semantics.md:411.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request_error",
+                    "message": "<error message>"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "INFERRED: missing or invalid credential. The envelope shape is the one observed on /api/oauth/* (missing_login); it has NOT been observed on /v1/messages. Whether the target accepts Bearer at all on /v1/* is BLOCKED-CRED (docs/01-endpoint-catalog.md:533-544).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "missing_login",
+                    "message": "Bearer access token is required."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/web/events": {
+      "post": {
+        "operationId": "webEventsCreate",
+        "tags": [
+          "Web"
+        ],
+        "summary": "Web event ingest — UNVERIFIED CONTRACT",
+        "description": "UNVERIFIED CONTRACT — DO NOT IMPLEMENT AGAINST THIS OPERATION.\n\nOnly existence is established: OPTIONS advertises `Allow: OPTIONS, POST`, while GET and HEAD return 405 with 0 bytes (evidence/M1-options-matrix.txt:26; M1-anon-probe-matrix.txt:74-75). The literal string also appears in the public layout bundle, so a browser client really does call it (evidence/M1-js-static-analysis.txt:60-63). No POST was issued and no response, content type, auth requirement or body has ever been observed.\n\nCOMPETING HYPOTHESES (recorded, none asserted):\nH1 telemetry/beacon: JSON body, 2xx/204, likely unauthenticated or cookie-auth, empty response.\nH2 server-sent event channel: POST-triggered text/event-stream (counter-indication: EventSource is GET-only and GET returns 405 here).\nH3 authenticated activity-feed mutation: bearer-auth JSON POST returning a JSON list.\nH4 cookie-based action endpoint relying on the anonymous visitor cookies minted by /api/download/client.\n\nConsequently this operation deliberately models NO request body, NO security requirement and NO success schema. The single `default` response is the honest placeholder (docs/01-endpoint-catalog.md:346-367; docs/02-usage-semantics.md:488).",
+        "x-evidence-grade": "VERIFIED (existence only); UNVERIFIED contract",
+        "x-contract-status": "unverified",
+        "responses": {
+          "default": {
+            "description": "UNVERIFIED: no POST response has ever been observed. Content type, status code, auth requirement and body are unknown. Do not generate a client from this operation."
+          }
+        }
+      }
+    },
+    "/api/download/client": {
+      "get": {
+        "operationId": "clientDownloadGet",
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Client artifact download (302 to Tencent COS)",
+        "description": "VERIFIED for every observed branch (docs/01-endpoint-catalog.md:369-389):\n- no platform parameter → 400 application/json `invalid_platform` (79 B — evidence/M1-anon-probe-matrix.txt:76, 237-245);\n- `?platform=linux` → 302 to the Tencent COS artifact, with two visitor cookies minted (evidence/M1-anon-probe-matrix.txt:337-355);\n- `?platform=darwin` → the identical 400 `invalid_platform` (:357-366).\n\nNO AUTH is required; anonymous callers receive the redirect. The accepted vocabulary is only partially known: `linux` is proven, `darwin` is proven rejected, and the conventional {linux, darwin, win32} set is disproved for the pair tested. The enum below therefore contains exactly the one proven value (docs/01-endpoint-catalog.md:374-377).\n\nSIDE EFFECT: this anonymous GET mints two secure cookies, so it is not a pure read. Cookie VALUES were redacted during capture and are never reproduced here — only names, attributes and lifetimes are documented.",
+        "x-evidence-grade": "VERIFIED (all observed branches); INFERRED (vocabulary beyond linux)",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "query",
+            "required": true,
+            "description": "Required. `linux` is the only proven accepted value; `darwin` was observed to be rejected with the same 400 body as the missing-parameter case. Additional values are UNVERIFIED — extend this enum only after an observation (docs/01-endpoint-catalog.md:374-377).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "linux"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "VERIFIED: redirect to the release artifact on Tencent COS. The redirect was not followed during capture, so the COS response itself is unprobed (acceptance/M1.md:37).",
+            "headers": {
+              "Location": {
+                "description": "VERIFIED: absolute COS URL. The `releases/latest/` segment implies a moving 'latest' alias (INFERRED).",
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "example": "https://agi-phanthy-dev-1252788780.cos.ap-beijing.myqcloud.com/releases/latest/PhanthyCode-linux-x86_64.tar.gz"
+              },
+              "Set-Cookie": {
+                "description": "VERIFIED (names and attributes only; values redacted and never persisted): `phanthy_vid` with Max-Age=7776000 (90 days) and `phanthy_vsid` with Max-Age=1800 (30 minutes), both Path=/; Secure; HttpOnly; SameSite=lax.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "phanthy_vid=<redacted>; Path=/; Max-Age=7776000; Secure; HttpOnly; SameSite=lax"
+              }
+            }
+          },
+          "400": {
+            "description": "VERIFIED: missing parameter or a rejected platform value (e.g. `darwin`). Identical body in both cases.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_platform",
+                    "message": "Download platform is invalid."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public-assets/": {
+      "get": {
+        "operationId": "publicAssetsGet",
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Trailing-slash redirect to /api/public-assets (redirect only)",
+        "description": "VERIFIED REDIRECT ONLY: `GET /api/public-assets/` returns 308 with `location: /api/public-assets`, `refresh: 0;url=/api/public-assets`, and an 18-byte body that is literally `/api/public-assets` (evidence/M1-anon-probe-matrix.txt:77, 247-255; M1-options-matrix.txt:28).\n\nThe redirect target `/api/public-assets` (no trailing slash) was deliberately NOT followed, so its status, content type, auth requirement and body are unknown (docs/01-endpoint-catalog.md:391-406; acceptance/M1.md:47, 70). This document therefore models the 308 on the slash path and asserts NO 200 body or response schema. The string is called from two public bundles and robots.txt explicitly allows `/api/public-assets/` (evidence/M1-js-static-analysis.txt:59, 62; M1-anon-probe-matrix.txt:383).",
+        "x-evidence-grade": "VERIFIED (redirect only); INFERRED (target semantics)",
+        "responses": {
+          "308": {
+            "description": "VERIFIED: permanent trailing-slash normalisation. The target is unprobed — no downstream schema is asserted.",
+            "headers": {
+              "Location": {
+                "description": "VERIFIED.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "/api/public-assets"
+              },
+              "Refresh": {
+                "description": "VERIFIED: `refresh: 0;url=/api/public-assets`.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "0;url=/api/public-assets"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "description": "18-byte body equal to the redirect target. No content-type header was emitted during capture.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "/api/public-assets"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/robots.txt": {
+      "get": {
+        "operationId": "robotsGet",
+        "tags": [
+          "Meta"
+        ],
+        "summary": "Crawler policy",
+        "description": "VERIFIED: 200 text/plain; charset=UTF-8, 527 B, sha256 e9df3e770411dccc14595ac4610fa43e52f6175bedab25f75bd3c464bda64134, `x-nextjs-cache: HIT` (evidence/M1-anon-probe-matrix.txt:80, 369-402).\n\nThe body enumerates the site's own private surface as `Disallow` rules (`/api`, `/oauth`, `/v1`, `/admin`, `/account`, `/login`, `/register`, `/payment`, `/app`, `/feedback`, `/docs`, and the password flows) and `Allow`s `/api/public-assets/`. This is a hint, not proof that those paths exist — none was probed except the `/api` and `/v1` prefixes. OPTIONS on this path returns 405 WITH `Allow: GET` / `Allow: HEAD`, unlike the API routes (evidence/M1-options-matrix.txt:31, 370-375).",
+        "x-evidence-grade": "VERIFIED",
+        "responses": {
+          "200": {
+            "description": "VERIFIED: static robots.txt.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "User-Agent: *\nAllow: /\nAllow: /download\nAllow: /token-plan\nAllow: /skills\nAllow: /changelog\nAllow: /work\nAllow: /prompts\nAllow: /llms.txt\nAllow: /api/public-assets/\nDisallow: /admin\nDisallow: /account\nDisallow: /api\nDisallow: /oauth\nDisallow: /v1\nDisallow: /logout\nDisallow: /login\nDisallow: /register\nDisallow: /payment\nDisallow: /app\nDisallow: /feedback\nDisallow: /reset-password\nDisallow: /forgot-password\nDisallow: /verify-email\nDisallow: /docs\n\nHost: https://code.phanthy.com\nSitemap: https://code.phanthy.com/sitemap.xml"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sitemap.xml": {
+      "get": {
+        "operationId": "sitemapGet",
+        "tags": [
+          "Meta"
+        ],
+        "summary": "SEO sitemap (841 URLs, content only)",
+        "description": "VERIFIED: 200 application/xml, 109,314 B, sha256 1c1f5014e54850f1c77bf7e391fa3d3eb0202410c81f4defd653a0a77768b812, `x-nextjs-cache: HIT`, 841 unique `<loc>` entries with 0 duplicates and 0 occurrences of `/api/`, `/oauth/`, `/v1/` or `/admin` (evidence/M1-anon-probe-matrix.txt:404-438; acceptance/M1.md:48).\n\nThe body is not inlined: 841 URLs are summarised by digest and prefix counts. OPTIONS returns 405 with `Allow: GET` / `Allow: HEAD` (evidence/M1-options-matrix.txt:32, 390-395). The surface is content-only SEO and leaks no API paths.",
+        "x-evidence-grade": "VERIFIED",
+        "responses": {
+          "200": {
+            "description": "VERIFIED: sitemap document. Body omitted on purpose; reproduce with `curl -sS --http2 https://code.phanthy.com/sitemap.xml | sha256sum` and compare to the digest above.",
+            "content": {
+              "application/xml": {
+                "schema": {
+                  "type": "string",
+                  "description": "sitemaps.org 0.9 urlset with 841 unique <loc> entries."
+                },
+                "example": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<url><loc>https://code.phanthy.com/</loc><changefreq>weekly</changefreq><priority>1</priority></url>\n<!-- … 840 more <loc> entries … -->\n</urlset>"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "PRIOR-ART alternative for POST /v1/messages: the CLI-facing API key, preferred by the proxy when one exists (internal/upstream/client.go:344-345). Whether an API key can still be minted is BLOCKED-CRED: both known create_api_key paths return the HTML 404 shell (evidence/M1-anon-probe-matrix.txt:67-68). Use the placeholder <api_key>."
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Authorization: Bearer <access_token>. VERIFIED as the guard on /api/oauth/profile and /api/oauth/claude_cli/roles (evidence/M1-anon-probe-matrix.txt:66, 69, 154-163). PRIOR-ART as the fallback credential for POST /v1/messages when no API key exists (internal/upstream/client.go:346-350; cmd/login/main.go:97-104). Whether the target accepts Bearer on /v1/* is BLOCKED-CRED. Use the placeholder <access_token>."
+      }
+    },
+    "schemas": {
+      "ErrorDetail": {
+        "type": "object",
+        "description": "VERIFIED error fields. The same {code,message} pair appears on every observed JSON error.",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code. Observed values: missing_login, unsupported_response_type, invalid_platform.",
+            "examples": [
+              "missing_login",
+              "unsupported_response_type",
+              "invalid_platform"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable message."
+          }
+        },
+        "additionalProperties": true
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "description": "VERIFIED target-side error envelope: {\"error\":{\"code\",\"message\"}} (evidence/M1-anon-probe-matrix.txt:60, 66, 76). There is no JSON 404 body: unmatched API paths return the Next.js HTML shell (docs/01-endpoint-catalog.md:443-462).",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "additionalProperties": true,
+        "examples": [
+          {
+            "error": {
+              "code": "missing_login",
+              "message": "Bearer access token is required."
+            }
+          }
+        ]
+      },
+      "TokenResponse": {
+        "type": "object",
+        "description": "PRIOR-ART / NEVER OBSERVED. Token endpoint response as consumed by the repository: access_token is required by the caller; expires_in drives the client-side expiry; a rotated refresh_token may be returned (cmd/login/main.go:171-175, 208-218; internal/upstream/client.go:248-258). Additional conventional fields such as token_type or scope are unreferenced and therefore unknown.",
+        "required": [
+          "access_token"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "Placeholder <access_token>; never captured."
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Placeholder <refresh_token>; may rotate on refresh (PRIOR-ART)."
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Lifetime in seconds (PRIOR-ART). Actual TTL is BLOCKED-CRED.",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": true
+      },
+      "OpenIDConfiguration": {
+        "type": "object",
+        "description": "VERIFIED field-for-field (evidence/M1-openid-configuration.json:2-26). Note the OIDC absences: no userinfo_endpoint, no id_token signing metadata, no subject_types_supported, no openid scope.",
+        "required": [
+          "issuer",
+          "authorization_endpoint",
+          "token_endpoint",
+          "revocation_endpoint",
+          "jwks_uri",
+          "response_types_supported",
+          "grant_types_supported",
+          "code_challenge_methods_supported",
+          "token_endpoint_auth_methods_supported",
+          "scopes_supported"
+        ],
+        "properties": {
+          "issuer": {
+            "type": "string",
+            "format": "uri",
+            "examples": [
+              "https://code.phanthy.com"
+            ]
+          },
+          "authorization_endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "token_endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "revocation_endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "jwks_uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "response_types_supported": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "code"
+              ]
+            }
+          },
+          "grant_types_supported": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "authorization_code",
+                "refresh_token"
+              ]
+            }
+          },
+          "code_challenge_methods_supported": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "S256"
+              ]
+            }
+          },
+          "token_endpoint_auth_methods_supported": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "none"
+              ]
+            }
+          },
+          "scopes_supported": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "user:profile",
+                "user:inference",
+                "user:sessions:claude_code",
+                "user:mcp_servers",
+                "user:file_upload"
+              ]
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "Jwks": {
+        "type": "object",
+        "description": "VERIFIED public key set: exactly one RSA signing key (evidence/M1-jwks.json:22-35).",
+        "required": [
+          "keys"
+        ],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Jwk"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "Jwk": {
+        "type": "object",
+        "description": "VERIFIED RSA public key. `kid=configured-key` is a default-style identifier; rotation is not demonstrated.",
+        "required": [
+          "kty",
+          "n",
+          "e",
+          "kid"
+        ],
+        "properties": {
+          "kty": {
+            "type": "string",
+            "enum": [
+              "RSA"
+            ]
+          },
+          "n": {
+            "type": "string",
+            "description": "Base64url RSA modulus (public key material only)."
+          },
+          "e": {
+            "type": "string",
+            "examples": [
+              "AQAB"
+            ]
+          },
+          "kid": {
+            "type": "string",
+            "examples": [
+              "configured-key"
+            ]
+          },
+          "use": {
+            "type": "string",
+            "examples": [
+              "sig"
+            ]
+          },
+          "alg": {
+            "type": "string",
+            "examples": [
+              "RS256"
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "AnthropicMessagesRequest": {
+        "type": "object",
+        "description": "PRIOR-ART / BLOCKED-CRED. Modelled from internal/upstream/payload.go:47-60 and the Anthropic Messages API conventions. The proxy always serializes max_tokens and forces stream=true (payload.go:109, 117-119). No live request has been observed.",
+        "required": [
+          "model",
+          "max_tokens",
+          "messages"
+        ],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Client-facing alias or upstream model ID. Unmapped names pass through unchanged (payload.go:91-97). The roster is PRIOR-ART / unverified live (docs/02-usage-semantics.md:335-357).",
+            "examples": [
+              "Iris-1.0",
+              "DeepSeek-V4"
+            ]
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "Required in practice: the prior-art struct has no omitempty. The proxy accepts 1..65536 and rewrites anything outside that range to 8192 (payload.go:117-119).",
+            "minimum": 1,
+            "maximum": 65536
+          },
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Conversation turns, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/MessageParam"
+            }
+          },
+          "system": {
+            "type": "string",
+            "description": "System prompt. Prior art joins system/developer messages with a blank line (payload.go:141-147, 208-210)."
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Passed through unmodified by the prior art (payload.go:121-123)."
+          },
+          "top_p": {
+            "type": "number",
+            "description": "Passed through unmodified (payload.go:124-126)."
+          },
+          "stream": {
+            "type": "boolean",
+            "default": false,
+            "description": "Prior art forces this to true (payload.go:109). Whether the target honours stream=false is BLOCKED-CRED."
+          },
+          "tools": {
+            "type": "array",
+            "description": "Tool definitions. OpenAI function objects are converted; a missing schema becomes {\"type\":\"object\",\"properties\":{}} (payload.go:212-218, 306-335).",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            }
+          },
+          "tool_choice": {
+            "$ref": "#/components/schemas/ToolChoice"
+          },
+          "stop_sequences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Mapped from OpenAI `stop` (payload.go:127-129)."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Prior art sets {user_id: <openai user>} (payload.go:130-132).",
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "example": "<user_id>"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "MessageParam": {
+        "type": "object",
+        "description": "PRIOR-ART: one conversation turn (payload.go:62-65).",
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "description": "A plain string or an array of content blocks.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContentBlock"
+                }
+              }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "ContentBlock": {
+        "type": "object",
+        "description": "Loose content block. The prior art distinguishes text blocks only and flattens image parts to the literal text \"[image]\" (payload.go:294-298); other block kinds are modelled permissively.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "examples": [
+              "text"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "Tool": {
+        "type": "object",
+        "description": "PRIOR-ART tool definition (payload.go:67-71).",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "input_schema": {
+            "type": "object",
+            "description": "JSON Schema for the tool input; the prior art defaults a missing schema to an empty object schema.",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "ToolChoice": {
+        "description": "PRIOR-ART: none / auto / any, or a specific tool (payload.go:337-380).",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "any",
+                  "none"
+                ]
+              }
+            },
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "name"
+            ],
+            "properties": {
+              "type": {
+                "const": "tool"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      },
+      "Usage": {
+        "type": "object",
+        "description": "Token accounting as read from message_start / message_delta (sse.go:18-25, 265-272). PRIOR-ART.",
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": true
+      },
+      "MessageResponse": {
+        "type": "object",
+        "description": "PRIOR-ART / NEVER OBSERVED. Deliberately loose non-streaming message model, inferred from the message_start payload (sse.go:18-25) and the repository's SSE fixture (sse_test.go:11). Do not treat any field as verified.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "examples": [
+              "msg_<id>"
+            ]
+          },
+          "type": {
+            "const": "message"
+          },
+          "role": {
+            "const": "assistant"
+          },
+          "model": {
+            "type": "string"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentBlock"
+            }
+          },
+          "stop_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stop_sequence": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

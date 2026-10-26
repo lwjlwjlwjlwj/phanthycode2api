@@ -1,0 +1,37 @@
+{
+  "milestone": "M0",
+  "captured_at": "2026-10-26T00:00:00+08:00",
+  "target": "https://code.phanthy.com/",
+  "environment": {
+    "node": "v24.1.0",
+    "python": "3.14.8",
+    "go": "go1.26.5",
+    "proxy_env_present": true,
+    "workspace": "/workspace",
+    "git_branch": "trae/agent-IJNSql",
+    "git_head": "4cbc11b"
+  },
+  "preflight_checks": [
+    {"check": "target_reachable", "result": "HTTP 200, 56923 bytes, text/html; charset=utf-8"},
+    {"check": "cdn_waf", "result": "Kong 2.5.1 + TencentEdgeOne (headers: x-kong-proxy-latency, eo-log-uuid)"},
+    {"check": "go_test_baseline", "result": "ok: internal/pool, internal/upstream; others no test files"},
+    {"check": "apifox_credentials", "result": "ABSENT (no APIFOX_ACCESS_TOKEN in env, no connector)"},
+    {"check": "authenticated_test_account", "result": "NOT PROVIDED (user authorized scope but did not supply token)"},
+    {"check": "untrusted_repo", "result": "witt3rd/oh-my-hermes read as plain text only; no execution"}
+  ],
+  "early_endpoint_signals": {
+    "well_known_openid_configuration": "HTTP 200",
+    "oauth_authorize": "OPTIONS 204; Allow: GET, HEAD, OPTIONS",
+    "oauth_token": "OPTIONS 204; Allow: OPTIONS, POST",
+    "api_oauth_profile": "GET 401; OPTIONS 204; Allow: GET, HEAD, OPTIONS",
+    "v1_messages": "OPTIONS 204; Allow: OPTIONS, POST",
+    "api_web_events": "OPTIONS 204; Allow: OPTIONS, POST",
+    "api_download_client": "GET 400 invalid_platform"
+  },
+  "hard_limits": [
+    "anonymous probes: GET/HEAD/OPTIONS only, <=1 rps",
+    "no auth bypass / brute force / DoS / exploitation",
+    "no L2 secret persistence",
+    "authenticated POST /v1/messages only with user-supplied own token"
+  ]
+}

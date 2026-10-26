@@ -1,0 +1,469 @@
+=== M1 ANONYMOUS PROBE MATRIX — https://code.phanthy.com ===
+captured_at (start): 2026-10-26T06:10:34+08:00
+captured_at (end):   2026-10-26T06:14:37+08:00
+author: M1 recon evidence completer (read-only, anonymous)
+scope: 19 required endpoints + 2 supplementary probe families (CORS, download platform)
+identity: fully anonymous — NO Authorization, NO Cookie, NO x-api-key, NO session, NO query params except where explicitly stated
+egress: HTTP_PROXY/HTTPS_PROXY = http://127.0.0.1:18080 (sandbox egress path; direct TCP to origin is blocked, all requests tunnelled through the proxy, HTTP/2 to origin)
+rate control: 1.1 s spacing between every request; max 3 requests per endpoint; single pass (no retries needed — every request returned a response)
+tools:
+  curl 8.5.0 (x86_64-pc-linux-gnu) libcurl/8.5.0 OpenSSL/3.0.13 zlib/1.3 brotli/1.1.0 zstd/1.5.5 libidn2/2.3.7 libpsl/0.21.2 libssh/0.10.6 nghttp2/1.59.0 librtmp/2.3
+  python3 3.14.8
+  sha256sum (GNU coreutils) 9.4
+rate-limit budget actually used: 54 requests total (19 GET headers+stats, 19 GET excerpts, 4 HEAD, 4 CORS, 2 platform, 3 extra /robots.txt, 2 extra /sitemap.xml, 1 OIDC provenance); per-endpoint maximum 5 (/robots.txt), all spacing ≥1.1 s
+
+--- EXACT COMMANDS USED ---
+[GET headers + transfer stats]  (body discarded)
+  curl -sS --http2 -m 30 -o /dev/null -D - -w '___STATS___ %{http_code}|%{content_type}|%{size_download}|%{redirect_url}\n' https://code.phanthy.com<PATH>
+
+[GET body excerpt]  (first 300 bytes only)
+  curl -sS --http2 -m 30 https://code.phanthy.com<PATH> | head -c 300
+
+[HEAD — used only where GET was disallowed]
+  curl -sS --http2 -I -m 30 -D - -w '___STATS___ %{http_code}|%{content_type}|%{size_download}\n' https://code.phanthy.com<PATH>
+
+[CORS OPTIONS]
+  curl -sS --http2 -m 30 -X OPTIONS -H 'Origin: https://example.com' -o /dev/null -D - -w '___STATS___ %{http_code}|%{content_type}|%{size_download}\n' https://code.phanthy.com<PATH>
+
+[CORS GET]
+  curl -sS --http2 -m 30 -H 'Origin: https://example.com' -o /dev/null -D - -w '___STATS___ %{http_code}|%{content_type}|%{size_download}\n' https://code.phanthy.com<PATH>
+
+[download platform probe]
+  curl -sS --http2 -m 30 -i 'https://code.phanthy.com/api/download/client?platform=linux'
+  curl -sS --http2 -m 30 -i 'https://code.phanthy.com/api/download/client?platform=darwin'
+
+[sitemap body digest]
+  curl -sS --http2 -m 30 https://code.phanthy.com/sitemap.xml | sha256sum
+  curl -sS --http2 -m 30 https://code.phanthy.com/robots.txt  | sha256sum
+
+--- READING NOTE (important, avoids a false-positive anomaly) ---
+Every captured header dump starts with:
+    HTTP/1.1 200 OK
+    date: ...
+This is the EGRESS PROXY's CONNECT tunnel handshake response (proxy at 127.0.0.1:18080), NOT an origin response.
+The real origin response is the subsequent "HTTP/2 <status>" block. Do not read the leading 200 as part of the target's behaviour.
+
+--- STATUS SEMANTICS USED FOR CLASSIFICATION ---
+  204 + `allow:` header          => route handler EXISTS; allow list is the authoritative method matrix (from M1-options-matrix.txt)
+  405                            => route EXISTS, method not allowed (handler present)
+  400 + application/json + {"error":{code,message}} => handler EXISTS and input validation is reached WITHOUT auth (validation precedes auth)
+  401 + application/json + www-authenticate Bearer  => handler EXISTS, auth REQUIRED (bearer token)
+  404 + text/html + 26xxx bytes  => route does NOT exist as an API handler; Next.js app-router 404 shell is served (HTML, not JSON)
+  308                            => Next.js trailing-slash normalisation
+  200 + text/html + 56923 bytes  => public app shell (marketing/app page)
+
+=== MAIN TABLE ===
+columns: endpoint | method | status | content-type | content-length | body excerpt (<=200 chars) | Location | classification
+content-length "ABSENT" = no content-length header emitted (chunked/streamed); the number after it is curl %{size_download}, i.e. bytes actually transferred.
+
+/ | GET | 200 | text/html; charset=utf-8 | ABSENT (56923 B) | <!DOCTYPE html><html dir="ltr" lang="zh-CN"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="preload" as="image" imageSrcSet="/_next/image?url=%2Fweb_pic.png&amp; | - | exists — public Next.js app shell (200)
+/oauth/authorize | GET | 400 | application/json | 101 | {"error":{"code":"unsupported_response_type","message":"Only authorization code flow is supported."}} | - | exists — handler reached, input validation error (no response_type supplied) — NO auth required to reach it
+/oauth/token | GET | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — GET rejected; POST-only per OPTIONS
+/oauth/token | HEAD | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — HEAD also rejected
+/oauth/revoke | GET | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — GET rejected; POST-only per OPTIONS
+/oauth/revoke | HEAD | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — HEAD also rejected
+/oauth/code/success | GET | 200 | text/html; charset=utf-8 | ABSENT (1769 B) | <!doctype html> <html lang="zh-CN"> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width, initial-scale=1"> <title>PhanthyCode 登录完成</title> | - | exists — static, hand-written HTML success page, no auth, no dynamic data in body
+/api/oauth/profile | GET | 401 | application/json | 79 | {"error":{"code":"missing_login","message":"Bearer access token is required."}} | - | auth-required (401) — handler EXISTS; WWW-Authenticate: Bearer realm="phanthy-code", error="invalid_request"
+/api/oauth/phanthy_cli/create_api_key | GET | 404 | text/html; charset=utf-8 | ABSENT (26614 B) | <!DOCTYPE html><html dir="ltr" lang="zh-CN"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/78537e3d8d5 | - | not-found (HTML shell) — route does NOT exist at this exact path
+/api/oauth/claude_cli/create_api_key | GET | 404 | text/html; charset=utf-8 | ABSENT (26613 B) | <!DOCTYPE html><html dir="ltr" lang="zh-CN"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/78537e3d8d5 | - | not-found (HTML shell) — route does NOT exist at this exact path
+/api/oauth/claude_cli/roles | GET | 401 | application/json | 79 | {"error":{"code":"missing_login","message":"Bearer access token is required."}} | - | auth-required (401) — handler EXISTS (same guard as /api/oauth/profile)
+/v1/messages | GET | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — GET rejected; POST-only (Anthropic-Messages-compatible surface)
+/v1/messages | HEAD | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — HEAD also rejected
+/v1/messages/count_tokens | GET | 404 | text/html; charset=utf-8 | ABSENT (26598 B) | <!DOCTYPE html><html dir="ltr" lang="zh-CN"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/78537e3d8d5 | - | not-found (HTML shell) — route does NOT exist at this exact path
+/v1/models | GET | 404 | text/html; charset=utf-8 | ABSENT (26579 B) | <!DOCTYPE html><html dir="ltr" lang="zh-CN"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/78537e3d8d5 | - | not-found (HTML shell) — route does NOT exist at this exact path
+/api/web/events | GET | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — GET rejected; POST-only per OPTIONS (SSE-style surface would normally be GET — see index open questions)
+/api/web/events | HEAD | 405 | ABSENT | ABSENT (0 B) | (empty) | - | method-not-allowed — HEAD also rejected
+/api/download/client | GET | 400 | application/json | 79 | {"error":{"code":"invalid_platform","message":"Download platform is invalid."}} | - | exists — validation error when ?platform is absent; NO auth required
+/api/public-assets/ | GET | 308 | ABSENT | ABSENT (18 B) | /api/public-assets | /api/public-assets | redirect (trailing slash normalisation); body is the redirect target text; also `refresh: 0;url=/api/public-assets`
+/api/health | GET | 404 | text/html; charset=utf-8 | ABSENT (26580 B) | <!DOCTYPE html><html dir="ltr" lang="zh-CN"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/78537e3d8d5 | - | not-found (HTML shell) — no health endpoint at this path
+/healthz | GET | 404 | text/html; charset=utf-8 | ABSENT (26573 B) | <!DOCTYPE html><html dir="ltr" lang="zh-CN"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/css/78537e3d8d5 | - | not-found (HTML shell) — no health endpoint at this path
+/robots.txt | GET | 200 | text/plain; charset=UTF-8 | ABSENT (527 B) | User-Agent: * / Allow: / / Allow: /download / Allow: /token-plan ... Disallow: /api / Disallow: /oauth / Disallow: /v1 (full verbatim body in APPENDIX A) | - | exists — static metadata file, GET/HEAD only (OPTIONS => 405)
+/sitemap.xml | GET | 200 | application/xml | ABSENT (109314 B) | <?xml version="1.0" encoding="UTF-8"?> <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"> <url><loc>https://code.phanthy.com/</loc> ... (841 <loc> entries; see APPENDIX B) | - | exists — generated sitemap, GET/HEAD only (OPTIONS => 405), x-nextjs-cache: HIT
+
+NOTE: no content-length header was emitted for ANY of the 19 endpoints. Next.js streams bodies; trust %{size_download} for byte counts.
+
+=== ENDPOINT-LEVEL RAW HEADERS (origin block only; proxy CONNECT 200 omitted) ===
+
+---------- GET / ----------
+HTTP/2 200
+content-type: text/html; charset=utf-8
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+link: </phanthy-code-logo-icon.png>; rel=preload; as="image"
+x-powered-by: Next.js
+x-kong-upstream-latency: 15
+x-kong-proxy-latency: 0
+via: kong/2.5.1
+server: TencentEdgeOne
+cache-control: private, must-revalidate, no-cache, no-store, max-age=0
+eo-log-uuid: 13347908947092363420
+eo-cache-status: MISS
+___STATS___ 200|text/html; charset=utf-8|56923|
+
+---------- GET /oauth/authorize ----------
+HTTP/2 400
+content-type: application/json
+x-kong-upstream-latency: 9
+via: kong/2.5.1
+server: TencentEdgeOne
+eo-log-uuid: 14690041860559090321
+eo-cache-status: MISS
+___STATS___ 400|application/json|101|
+body: {"error":{"code":"unsupported_response_type","message":"Only authorization code flow is supported."}}
+
+---------- GET /oauth/token ----------
+HTTP/2 405
+(no content-type, no allow header, no body)
+x-kong-upstream-latency: 7
+via: kong/2.5.1
+server: TencentEdgeOne
+eo-log-uuid: 17723296819499965433
+___STATS___ 405||0|
+
+---------- HEAD /oauth/token ----------
+HTTP/2 405
+(no content-type, no allow header, no body)
+x-kong-upstream-latency: 8
+eo-log-uuid: 2241825375601538464
+___STATS___ 405||0
+
+---------- GET /oauth/revoke ----------
+HTTP/2 405
+(no content-type, no allow header, no body)
+x-kong-upstream-latency: 6
+eo-log-uuid: 4742340602037188874
+___STATS___ 405||0|
+
+---------- HEAD /oauth/revoke ----------
+HTTP/2 405
+x-kong-upstream-latency: 7
+eo-log-uuid: 13347911532451515230
+___STATS___ 405||0
+
+---------- GET /oauth/code/success ----------
+HTTP/2 200
+content-type: text/html; charset=utf-8
+x-kong-upstream-latency: 7
+via: kong/2.5.1
+server: TencentEdgeOne
+eo-log-uuid: 11567196802623750951
+eo-cache-status: MISS
+___STATS___ 200|text/html; charset=utf-8|1769|
+body_excerpt: <!doctype html>\n<html lang="zh-CN">\n  <head>\n    <meta charset="utf-8">\n    <title>PhanthyCode 登录完成</title>\n    <style>...
+
+---------- GET /api/oauth/profile ----------
+HTTP/2 401
+content-type: application/json
+www-authenticate: Bearer realm="phanthy-code", error="invalid_request", error_description="Bearer access token is required."
+x-kong-upstream-latency: 6
+via: kong/2.5.1
+server: TencentEdgeOne
+eo-log-uuid: 18262624281026049646
+___STATS___ 401|application/json|79|
+body: {"error":{"code":"missing_login","message":"Bearer access token is required."}}
+
+---------- GET /api/oauth/phanthy_cli/create_api_key ----------
+HTTP/2 404
+content-type: text/html; charset=utf-8
+link: </phanthy-code-logo-new.png>; rel=preload; as="image"
+x-powered-by: Next.js
+cache-control: private, must-revalidate, no-cache, no-store, max-age=0
+x-kong-upstream-latency: 11
+eo-log-uuid: 3292792275727825133
+___STATS___ 404|text/html; charset=utf-8|26614|
+
+---------- GET /api/oauth/claude_cli/create_api_key ----------
+HTTP/2 404
+content-type: text/html; charset=utf-8
+link: </phanthy-code-logo-new.png>; rel=preload; as="image"
+x-powered-by: Next.js
+x-kong-upstream-latency: 13
+eo-log-uuid: 5694665228093603598
+___STATS___ 404|text/html; charset=utf-8|26613|
+
+---------- GET /api/oauth/claude_cli/roles ----------
+HTTP/2 401
+content-type: application/json
+www-authenticate: Bearer realm="phanthy-code", error="invalid_request", error_description="Bearer access token is required."
+x-kong-upstream-latency: 5
+eo-log-uuid: 14273250573001608729
+___STATS___ 401|application/json|79|
+
+---------- GET /v1/messages ----------
+HTTP/2 405
+(no content-type, no allow header, no body)
+x-kong-upstream-latency: 3
+x-kong-proxy-latency: 1
+eo-log-uuid: 14854472667415530784
+___STATS___ 405||0|
+
+---------- HEAD /v1/messages ----------
+HTTP/2 405
+x-kong-upstream-latency: 6
+eo-log-uuid: 10548974438104771692
+___STATS___ 405||0
+
+---------- GET /v1/messages/count_tokens ----------
+HTTP/2 404
+content-type: text/html; charset=utf-8
+x-powered-by: Next.js
+x-kong-upstream-latency: 10
+x-kong-proxy-latency: 1
+eo-log-uuid: 5102280431811685261
+___STATS___ 404|text/html; charset=utf-8|26598|
+
+---------- GET /v1/models ----------
+HTTP/2 404
+content-type: text/html; charset=utf-8
+x-powered-by: Next.js
+x-kong-upstream-latency: 11
+eo-log-uuid: 8610509921428276466
+___STATS___ 404|text/html; charset=utf-8|26579|
+
+---------- GET /api/web/events ----------
+HTTP/2 405
+(no content-type, no allow header, no body)
+x-kong-upstream-latency: 5
+eo-log-uuid: 14408284576717453693
+___STATS___ 405||0|
+
+---------- HEAD /api/web/events ----------
+HTTP/2 405
+x-kong-upstream-latency: 4
+x-kong-proxy-latency: 1
+eo-log-uuid: 8681110133474341677
+___STATS___ 405||0
+
+---------- GET /api/download/client (no query) ----------
+HTTP/2 400
+content-type: application/json
+x-kong-upstream-latency: 5
+via: kong/2.5.1
+server: TencentEdgeOne
+eo-log-uuid: 2800704823662257828
+___STATS___ 400|application/json|79|
+body: {"error":{"code":"invalid_platform","message":"Download platform is invalid."}}
+
+---------- GET /api/public-assets/ ----------
+HTTP/2 308
+location: /api/public-assets
+refresh: 0;url=/api/public-assets
+x-kong-upstream-latency: 4
+x-kong-proxy-latency: 1
+eo-log-uuid: 6651187825621293524
+___STATS___ 308||18|https://code.phanthy.com/api/public-assets
+body: /api/public-assets
+
+---------- GET /api/health ----------
+HTTP/2 404
+content-type: text/html; charset=utf-8
+x-powered-by: Next.js
+x-kong-upstream-latency: 13
+eo-log-uuid: 10513801836242924498
+___STATS___ 404|text/html; charset=utf-8|26580|
+
+---------- GET /healthz ----------
+HTTP/2 404
+content-type: text/html; charset=utf-8
+x-powered-by: Next.js
+x-kong-upstream-latency: 12
+eo-log-uuid: 2908229314203662386
+___STATS___ 404|text/html; charset=utf-8|26573|
+
+---------- GET /robots.txt ----------
+HTTP/2 200
+content-type: text/plain; charset=UTF-8
+x-nextjs-cache: HIT
+cache-control: public, must-revalidate, max-age=0
+x-kong-upstream-latency: 5
+eo-log-uuid: 14158796973621831413
+___STATS___ 200|text/plain; charset=UTF-8|527|
+
+---------- GET /sitemap.xml ----------
+HTTP/2 200
+content-type: application/xml
+x-nextjs-cache: HIT
+cache-control: public, must-revalidate, max-age=0
+x-kong-upstream-latency: 6
+eo-log-uuid: 13427015993690006619
+___STATS___ 200|application/xml|109314|
+
+=== SUPPLEMENTARY PROBE (a) — CORS WITH Origin: https://example.com ===
+question: does the origin honour cross-origin requests / emit CORS headers, and does the status change vs. the same-origin anonymous probe?
+result: NO CORS headers of any kind in any of the four responses (no access-control-allow-origin, none of the probes used access-control-allow-methods / -headers since no preflight header was sent);
+        `vary` never gains `origin` (it stays: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch[, Accept-Encoding]);
+        statuses are IDENTICAL to the no-Origin baseline.
+
+path|method|Origin|status|allow|access-control-allow-origin|access-control-allow-methods|access-control-allow-headers|vary:origin|status_changed_vs_baseline
+/api/oauth/profile|OPTIONS|https://example.com|204|GET, HEAD, OPTIONS|-|-|-|absent|NO (baseline 204, identical allow)
+/api/oauth/profile|GET|https://example.com|401|-|-|-|-|absent|NO (baseline 401, identical body length 79)
+/v1/messages|OPTIONS|https://example.com|204|OPTIONS, POST|-|-|-|absent|NO (baseline 204, identical allow)
+/v1/messages|GET|https://example.com|405|-|-|-|-|absent|NO (baseline 405)
+
+raw headers — OPTIONS /api/oauth/profile [Origin]
+HTTP/2 204
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+allow: GET, HEAD, OPTIONS
+x-kong-upstream-latency: 5
+via: kong/2.5.1
+server: TencentEdgeOne
+___STATS___ 204||0
+
+raw headers — GET /api/oauth/profile [Origin]
+HTTP/2 401
+content-type: application/json
+www-authenticate: Bearer realm="phanthy-code", error="invalid_request", error_description="Bearer access token is required."
+x-kong-upstream-latency: 419
+___STATS___ 401|application/json|79
+
+raw headers — OPTIONS /v1/messages [Origin]
+HTTP/2 204
+allow: OPTIONS, POST
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+x-kong-upstream-latency: 5
+___STATS___ 204||0
+
+raw headers — GET /v1/messages [Origin]
+HTTP/2 405
+(no content-type, no body, no CORS headers)
+x-kong-upstream-latency: 6
+___STATS___ 405||0
+
+INTERPRETATION (kept strictly to what was observed): the edge + app do not return CORS response headers for an arbitrary third-party Origin,
+therefore a browser at https://example.com cannot read these responses cross-origin. Whether CORS is origin-allowlisted (rather than simply off)
+is NOT established by this probe and is left to M2.
+
+=== SUPPLEMENTARY PROBE (b) — /api/download/client?platform=<value> ===
+command: curl -sS --http2 -m 30 -i 'https://code.phanthy.com/api/download/client?platform=<value>'
+parameters added: ONLY platform (no other params), as mandated.
+
+?platform=linux
+HTTP/2 302
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+location: https://agi-phanthy-dev-1252788780.cos.ap-beijing.myqcloud.com/releases/latest/PhanthyCode-linux-x86_64.tar.gz
+set-cookie: phanthy_vid=<redacted>; Path=/; Expires=Sat, 23 Jan 2027 22:14:24 GMT; Max-Age=7776000; Secure; HttpOnly; SameSite=lax
+set-cookie: phanthy_vsid=<redacted>; Path=/; Expires=Sun, 25 Oct 2026 22:44:24 GMT; Max-Age=1800; Secure; HttpOnly; SameSite=lax
+x-kong-upstream-latency: 9
+via: kong/2.5.1
+server: TencentEdgeOne
+eo-log-uuid: 6105151379880944495
+transfer: redirect, empty body (curl issued no follow — -L not used)
+classification: 3xx redirect — platform value "linux" ACCEPTED; artifact hosted on Tencent COS (bucket agi-phanthy-dev-1252788780, ap-beijing)
+side effect observed: two anonymous visitor cookies are minted by this endpoint (phanthy_vid long-lived 90d, phanthy_vsid 30min).
+                    values redacted per hard rule 3. This is a session-issuing endpoint, i.e. it is NOT purely static.
+
+?platform=darwin
+HTTP/2 400
+content-type: application/json
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+x-kong-upstream-latency: 8
+server: TencentEdgeOne
+eo-log-uuid: 4494489118935851424
+body (verbatim, 79 B): {"error":{"code":"invalid_platform","message":"Download platform is invalid."}}
+classification: 400 validation error — "darwin" is NOT an accepted platform token (same body/code/byte count as the no-parameter probe).
+              The accepted vocabulary is therefore NOT the conventional {linux,darwin,win32}; only `linux` is proven. No further values were tried (out of scope / parameter budget).
+
+=== APPENDIX A — /robots.txt VERBATIM BODY ===
+captured: 2026-10-26T06:13:33+08:00 via GET
+bytes: 527 | sha256(body): e9df3e770411dccc14595ac4610fa43e52f6175bedab25f75bd3c464bda64134
+content-type: text/plain; charset=UTF-8 | status 200 | x-nextjs-cache: HIT
+----8<----
+User-Agent: *
+Allow: /
+Allow: /download
+Allow: /token-plan
+Allow: /skills
+Allow: /changelog
+Allow: /work
+Allow: /prompts
+Allow: /llms.txt
+Allow: /api/public-assets/
+Disallow: /admin
+Disallow: /account
+Disallow: /api
+Disallow: /oauth
+Disallow: /v1
+Disallow: /logout
+Disallow: /login
+Disallow: /register
+Disallow: /payment
+Disallow: /app
+Disallow: /feedback
+Disallow: /reset-password
+Disallow: /forgot-password
+Disallow: /verify-email
+Disallow: /docs
+
+Host: https://code.phanthy.com
+Sitemap: https://code.phanthy.com/sitemap.xml
+---->8----
+
+=== APPENDIX B — /sitemap.xml ===
+captured: 2026-10-26T06:13:35+08:00 via GET
+status 200 | content-type: application/xml | bytes 109314 | x-nextjs-cache: HIT
+sha256(body): 1c1f5014e54850f1c77bf7e391fa3d3eb0202410c81f4defd653a0a77768b812
+DEVIATION FROM EXPECTATION, recorded honestly: this file is NOT tiny (109,314 B / 841 <loc> entries),
+so the full body is not pasted here. It is exactly reproducible with:
+  curl -sS --http2 https://code.phanthy.com/sitemap.xml | sha256sum   # => 1c1f5014...68b812
+Verbatim head (first 8 <loc> entries, byte-exact):
+----8<----
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url>
+<loc>https://code.phanthy.com/</loc>
+<changefreq>weekly</changefreq>
+<priority>1</priority>
+</url>
+<url>
+<loc>https://code.phanthy.com/code</loc>
+<changefreq>weekly</changefreq>
+<priority>0.85</priority>
+</url>
+<url>
+<loc>https://code.phanthy.com/work/use-cases/product-ops</loc>
+... (URL block pattern repeats for every entry)
+---->8----
+Verbatim tail (last 5 <loc> values):
+  https://code.phanthy.com/token-plan
+  https://code.phanthy.com/skills
+  https://code.phanthy.com/changelog
+  https://code.phanthy.com/terms
+  https://code.phanthy.com/privacy
+Structure facts (python3 parse of the body, regex <loc>(.*?)</loc>):
+  url_count 841 | unique_locs 841 | duplicates 0
+  top-2-segment prefix counts: /work/stories 85, /work/challenge 17, /work/use-cases 3, others 1 each (/, /code, /work/activities, /blog, /prompts, /prompts/<id> xmany, /token-plan, /skills, /changelog, /terms, /privacy)
+  occurrences of sensitive prefixes: "/api/" 0, "/oauth/" 0, "/v1/" 0, "/admin" 0, "/llms.txt" 0
+  => the sitemap leaks no API/OAuth/admin paths; robots.txt (Appendix A) is the only SEO surface that names them.
+
+=== CROSS-CHECK vs M1-options-matrix.txt ===
+OPTIONS allow-lists (previous capture, 2026-10-26T06:00:47+08:00) and today's GET/HEAD results agree everywhere:
+  /oauth/token, /oauth/revoke, /v1/messages, /api/web/events  => OPTIONS allow = {OPTIONS, POST}; GET and HEAD rejected 405  (consistent)
+  /api/oauth/profile, /api/oauth/claude_cli/roles, /api/download/client, /oauth/authorize, /oauth/code/success => OPTIONS allow includes GET; GET returns 200/400/401  (consistent)
+  /api/oauth/*/create_api_key, /v1/messages/count_tokens, /v1/models, /api/health, /healthz => OPTIONS 404 + GET 404 HTML shell  (consistent: no such handler)
+  /api/public-assets/ => OPTIONS 308 + GET 308 to /api/public-assets  (consistent)
+DISCREPANCY WORTH NOTING: OPTIONS on POST-only routes emits `allow: OPTIONS, POST`, but GET/HEAD 405 responses emit NO `Allow` header at all.
+  RFC 9110 requires Allow on 405; this app/edge does not send it. Method discovery MUST therefore rely on OPTIONS, not on the 405 response.
+
+=== APPENDIX C — /.well-known/openid-configuration PROVENANCE FETCH ===
+captured: 2026-10-26T06:14:37+08:00 via GET  (1 request; this path is NOT one of the 19 anonymous-probe targets — it was
+         fetched solely to prove that M1-openid-configuration.json is really served from this URL, because that file
+         itself contains no command/header provenance)
+command: curl -sS --http2 -m 30 -i https://code.phanthy.com/.well-known/openid-configuration
+HTTP/2 200
+content-type: application/json
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+x-kong-upstream-latency: 8
+x-kong-proxy-latency: 1
+via: kong/2.5.1
+server: TencentEdgeOne
+eo-log-uuid: 16099306569885322240
+eo-cache-status: MISS
+body_verbatim (minified single line, 683 B):
+{"issuer":"https://code.phanthy.com","authorization_endpoint":"https://code.phanthy.com/oauth/authorize","token_endpoint":"https://code.phanthy.com/oauth/token","revocation_endpoint":"https://code.phanthy.com/oauth/revoke","jwks_uri":"https://code.phanthy.com/.well-known/jwks.json","response_types_supported":["code"],"grant_types_supported":["authorization_code","refresh_token"],"code_challenge_methods_supported":["S256"],"token_endpoint_auth_methods_supported":["none"],"scopes_supported":["user:profile","user:inference","user:sessions:claude_code","user:mcp_servers","user:file_upload"]}
+CONFORMANCE NOTE: this byte string is NOT identical to M1-openid-configuration.json (771 B, pretty-printed with 4-space
+  indent); every field and value is identical. Any "byte-for-byte" claim would be wrong — cite field-level equality only.
+This fetch is what allows the discovery document to be graded `verified` (served at this exact path, application/json, 200).

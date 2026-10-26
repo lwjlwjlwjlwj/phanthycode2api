@@ -1,0 +1,183 @@
+=== M1 JS STATIC ANALYSIS — public Next.js chunks, https://code.phanthy.com ===
+captured_at: 2026-10-26T06:06:01+08:00
+method: GET only, public static assets, no execution of chunk code (text scan only)
+scope: 12 chunks, 524648 bytes total
+chunk sha256 provenance: see M1-js-chunks.tsv
+
+chunk inventory (name | bytes | sha256[:16]):
+  1255-60d8dc7c8c9309a1.js                               174644  e4d8c5c6049bb57c
+  1356-b1f982685cfcaf9f.js                                13668  67035ca8007ab565
+  4bd1b696-100b9d70ed4e49c1.js                           173025  5421e13a91a93895
+  5000-93058b7f9e3f04a0.js                                 8563  9086f860d5643691
+  9894-c1c397f1dcfa0999.js                                 8645  d183c1a1d77a8293
+  error-cfb334b22365833b.js                                 753  4821551adda24e0f
+  global-error-64bfaf5fe33f3bc7.js                          824  560d582ef15a743f
+  layout-be0ffac7eea8e0cb.js                              28510  3f3a8d4376c254b5
+  main-app-234525b5e3ddebfb.js                              525  41ba6583b0641281
+  page-87d88dd0e4975730.js                                  420  e9910dd4edfcb6e1
+  polyfills-42372ed130431b0a.js                          112594  0973c1d64c88adc8
+  webpack-1080e2c4759858ce.js                              3829  e68b212a34a91d66
+
+=== 1. MATCH COUNT MATRIX (regex occurrence counts per chunk) ===
+chunk                                     endpoin  endpoin  endpoin  endpoin  endpoin     auth     auth     auth     auth    model    model    model    model    model    model    model    model    model
+1255-60d8dc7c8c9309a1.js                        0        0        0        0        1        0        0        0        0        0        0        0        0        0        0        0        0        0
+1356-b1f982685cfcaf9f.js                        0        0        0        0        2        0        0        0        0        0        0        0        0        0        0        0        0        0
+4bd1b696-100b9d70ed4e49c1.js                    0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+5000-93058b7f9e3f04a0.js                        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+9894-c1c397f1dcfa0999.js                        1        1        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+error-cfb334b22365833b.js                       0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+global-error-64bfaf5fe33f3bc7.js                0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+layout-be0ffac7eea8e0cb.js                      4        1        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+main-app-234525b5e3ddebfb.js                    0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+page-87d88dd0e4975730.js                        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+polyfills-42372ed130431b0a.js                   0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+webpack-1080e2c4759858ce.js                     0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0        0
+
+totals per category:
+  endpoint:/api/             5
+  endpoint:/v1/              2
+  endpoint:/oauth/           0
+  endpoint:/anthropic        0
+  endpoint:/messages         3
+  auth:x-api-key             0
+  auth:authorization         0
+  auth:anthropic-version     0
+  auth:anthropic-beta        0
+  model:Iris                 0
+  model:Zeus                 0
+  model:Gaia                 0
+  model:Apollo               0
+  model:Metis                0
+  model:DeepSeek             0
+  model:Claude               0
+  model:Kimi                 0
+  model:GLM                  0
+
+=== 2. ENDPOINT-LIKE STRINGS (deduped, per source chunk) ===
+-- endpoint:/api/ --
+  [9894-c1c397f1dcfa0999.js] (1 unique)
+      /api/public-assets/
+  [layout-be0ffac7eea8e0cb.js] (3 unique)
+      /api/download/client
+      /api/public-assets/
+      /api/web/events
+
+-- endpoint:/v1/ --
+  [9894-c1c397f1dcfa0999.js] (1 unique)
+      /v1/wechat-contact-qr.png
+  [layout-be0ffac7eea8e0cb.js] (1 unique)
+      /v1/wechat-contact-qr.png
+
+-- endpoint:/oauth/ --
+  (no matches)
+
+-- endpoint:/anthropic --
+  (no matches)
+
+-- endpoint:/messages --
+  [1255-60d8dc7c8c9309a1.js] (1 unique)
+      //nextjs.org/docs/messages/failed-to-find-server-action
+  [1356-b1f982685cfcaf9f.js] (2 unique)
+      //nextjs.org/docs/messages/invalid-images-config
+      //nextjs.org/docs/messages/next-image-missing-loader
+
+=== 3. AUTH HEADER NAME MATCHES (with +/-40 char context) ===
+-- auth:x-api-key --
+  (no matches)
+
+-- auth:authorization --
+  (no matches)
+
+-- auth:anthropic-version --
+  (no matches)
+
+-- auth:anthropic-beta --
+  (no matches)
+
+=== 4. MODEL IDENTIFIER MATCHES (context +/-60 chars, case-insensitive) ===
+-- model:Iris --
+  (no matches)
+
+-- model:Zeus --
+  (no matches)
+
+-- model:Gaia --
+  (no matches)
+
+-- model:Apollo --
+  (no matches)
+
+-- model:Metis --
+  (no matches)
+
+-- model:DeepSeek --
+  (no matches)
+
+-- model:Claude --
+  (no matches)
+
+-- model:Kimi --
+  (no matches)
+
+-- model:GLM --
+  (no matches)
+
+=== 5. HOSTNAMES REFERENCED IN CHUNKS ===
+absolute URLs (https?://host...), count | host | chunks:
+    19 | http://www.w3.org                                            | 1356-b1f982685cfcaf9f.js,4bd1b696-100b9d70ed4e49c1.js
+     4 | https://nextjs.org                                           | 1255-60d8dc7c8c9309a1.js,1356-b1f982685cfcaf9f.js
+     4 | https://a                                                    | polyfills-42372ed130431b0a.js
+     2 | https://react.dev                                            | 1255-60d8dc7c8c9309a1.js,4bd1b696-100b9d70ed4e49c1.js
+     2 | https://github.com                                           | polyfills-42372ed130431b0a.js
+     1 | https://my.feishu.cn                                         | layout-be0ffac7eea8e0cb.js
+     1 | https://x                                                    | polyfills-42372ed130431b0a.js
+
+* phanthy-related hosts: 0 unique -> (none)
+
+bare domain-like strings seen anywhere in chunk text (may be inside non-URL code):
+   116 e.me
+    97 n.me
+    37 t.me
+    21 e.co
+    20 a.com
+    19 www.w3.org
+    18 t.co
+    11 this.me
+    11 l.me
+    10 e.app
+    10 this.co
+    10 r.co
+     9 a.co
+     9 n.statenode.co
+     8 r.me
+     7 n.com
+     7 n.co
+     7 s.app
+     6 t.com
+     6 o.me
+     5 e.com
+     5 a.me
+     5 sv.head.app
+     5 rm.co
+     4 o.app
+     4 nextjs.org
+     4 react.co
+     4 t.app
+     4 lg.me
+     4 s.me
+     3 o.default.com
+     3 a.app
+     3 react.me
+     3 p.app
+     3 j.app
+     3 reflect.co
+     3 lx.me
+     3 t.statenode.co
+     3 r.alternate.me
+     3 this.app
+
+=== 6. ADDITIONAL /_next/static CHUNK REFERENCES FOUND INSIDE CHUNKS ===
+  (none — dynamic chunk names are hashed at build time, not embedded literally)
+
+=== 7. RSC / server payload strings of interest (raw HTML root page) ===
+(not a chunk; see M1-anon-probe-matrix.txt appendix and M1-root-headers.txt for root fetch)
